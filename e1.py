@@ -168,12 +168,27 @@ if __name__ == "__main__":
                     exp.reset()
             else:
                 pending = [exp for exp in experiments if exp.status() == "pending"]
-                E1.as_array(pending)
+                array = E1.as_array(pending)
                 if len(pending) == 0:
                     print(f"Nothing to run from {len(experiments)} experiments.")
                     sys.exit(0)
 
-            array.submit()
+            array.submit(
+                name=EXP_NAME,
+                slurm_headers={
+                    "partition": "gki_cpu-cascadelake",
+                    "mem-per-cpu": f"{MEM_PER_CPU_GB}G",
+                    "time": seconds_to_slurm_time(int(5 * 60 + TIME_SECONDS * 1.2)),
+                    "ntasks": 1,
+                    "cpus-per-task": N_CPU,
+                    "output": str(log_dir / "%j-%a.out"),
+                    "error": str(log_dir / "%j-%a.err"),
+                },
+                python="/work/dlclarge2/bergmane-pipeline-exps/exps/.eddie-venv/bin/python",
+                script_dir=result_dir / "slurm-scripts",
+                #sbatch=["sbatch",  "--bosch"],
+                limit=1,
+            )
         case "plot":
             array = E1.as_array(experiments)
             if any(exp.status() != "success" for exp in array):
