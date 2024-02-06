@@ -46,5 +46,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("tasks", nargs="+", type=str)
     parser.add_argument("--openml-cache-dir", type=Path, required=False)
+    parser.add_argument("--list", action="store_true")
     args = parser.parse_args()
-    download(args.tasks, openml_cache_dir=args.openml_cache_dir)
+    if args.list is True:
+        tasks = as_task_list(args.tasks)
+        for task in tasks:
+            print(task)
+    else:
+        download(args.tasks, openml_cache_dir=args.openml_cache_dir)
