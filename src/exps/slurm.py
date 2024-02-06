@@ -417,7 +417,7 @@ class ArraySlurmable(Sequence[T]):
         name: str,
         slurm_headers: dict[str, Any],
         *,
-        sbatch: str = "sbatch",
+        sbatch: str | list[str] = "sbatch",
         script_dir: Path | None = None,
         python: Path | str | None = None,
         limit: int | None = None,
@@ -438,7 +438,9 @@ class ArraySlurmable(Sequence[T]):
         with script_path.open("w") as f:
             f.write(submission_script)
 
-        subprocess.run([str(sbatch), str(script_path)], check=True)  # noqa: S603
+        _sbatch = [sbatch] if isinstance(sbatch, str) else sbatch
+
+        subprocess.run([*_sbatch, str(script_path)], check=True)  # noqa: S603
 
     def status(
         self,
