@@ -99,7 +99,7 @@ class E1(Slurmable):
 
 def run_it(run: E1) -> None:
     print(run)
-    sklearn.set_config(enable_metadata_routing=True, transform_output="pandas")
+    sklearn.set_config(enable_metadata_routing=False, transform_output="pandas")
     try:
         tt, X, _, y, _ = run.get_data()
         pipeline = PIPELINES[run.pipeline]
