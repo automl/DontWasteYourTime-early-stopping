@@ -405,14 +405,19 @@ knn_classifier = Sequential(
             "categorical": Choice(
                 Component(
                     OrdinalEncoder,
-                    space={"min_frequency": (0.001, 0.5), "max_categories": (2, 50)},
+                    space={"min_frequency": (0.001, 0.5)},
+                    config={"handle_unknown": "use_encoded_value", "unknown_value": -1},
                 ),
                 Component(
                     OneHotEncoder,
-                    space={"min_frequency": (0.001, 0.5), "max_categories": (2, 50)},
-                    config={"drop": "if_binary", "sparse_output": False},
+                    space={"max_categories": (2, 20)},
+                    config={
+                        "categories": request("categories", default="auto"),
+                        "drop": None,
+                        "sparse_output": True,
+                        "handle_unknown": "infrequent_if_exist",
+                    },
                 ),
-                name="categorical_encoder",
             ),
             "numerical": Component(
                 SimpleImputer,
@@ -424,7 +429,7 @@ knn_classifier = Sequential(
     Split(
         {
             "categorical": "passthrough",
-            "numerical": Component(MinMaxScaler),
+            "numerical": Choice("passthrough", Component(MinMaxScaler)),
         },
         name="numerical_scaler",
     ),
