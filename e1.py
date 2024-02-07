@@ -87,6 +87,10 @@ amlb_classification = [
     360975,
 ]
 
+def path_col_to_str(_df: pd.DataFrame) -> pd.DataFrame:
+    path_dtypes = _df.select_dtypes(Path).columns
+    return _df.astype({k: pd.StringDtype() for k in path_dtypes})
+
 if __name__ == "__main__":
     tasks = amlb_classification
     pipelines = ["rf_classifier", "mlp_classifier", "knn_classifier"]
@@ -100,11 +104,11 @@ if __name__ == "__main__":
 
     folds = list(range(10))
     MEM_PER_CPU_GB = 4
-    TIME_SECONDS = 10 * 60
+    TIME_SECONDS = 30 * 60
     N_CPU = 2
 
-    tasks = tasks[:3]
-    folds = folds[:3]
+    tasks = tasks
+    folds = folds
 
     experiments = [
         E1(
@@ -115,7 +119,7 @@ if __name__ == "__main__":
             n_cpus=N_CPU,
             memory_gb=MEM_PER_CPU_GB * N_CPU,
             time_seconds=TIME_SECONDS,
-            minimum_trials=5,
+            minimum_trials=2,
             wait=False,
             root=result_dir,
             cv_early_stop_strategy="disabled",
@@ -125,7 +129,6 @@ if __name__ == "__main__":
     ]
 
     parser, cmds = E1.parser(["status", "run", "submit"])
-    experiments = experiments[:1]
 
     with cmds("run") as p:
         p.add_argument("--overwrite", action="store_true")
@@ -135,16 +138,30 @@ if __name__ == "__main__":
 
     with cmds("status") as p:
         p.add_argument("--count", type=str, nargs="+", default=None)
+        p.add_argument("--out", type=Path, default=None)
+
+    with cmds("collect") as p:
+        p.add_argument("--fail-early", action="store_true")
+        p.add_argument("--ignore", nargs="+", type=str)
+        p.add_argument("--out", type=Path, required=True)
 
     with cmds("plot") as p:
-        pass
+        p.add_argument("input", type=Path)
+        p.add_argument("--out", type=Path, required=True)
 
     args = parser.parse_args()
 
     match args.command:
         case "status":
             array = E1.as_array(experiments)
-            print(array.status(exclude=["openml_cache_directory"], count=args.count))
+            status = array.status(
+                exclude=["root", "openml_cache_directory"],
+                count=args.count,
+            )
+            print(status)
+            if args.out:
+                status = path_col_to_str(status)
+                status.convert_dtypes().to_parquet(args.out)
         case "run":
             if args.overwrite:
                 array = E1.as_array(experiments)
@@ -160,6 +177,21 @@ if __name__ == "__main__":
 
             for exp in array:
                 exp.run()
+        case "collect":
+            array = E1.as_array(experiments)
+            if args.fail_early:
+                non_success_exps = [e for e in array if e.status() != "success"]
+                if any(non_success_exps):
+                    print(non_success_exps)
+
+            _df = pd.concat([exp.history() for exp in array])
+            if args.ignore:
+                _df = _df.drop(columns=args.ignore)
+
+            _df = path_col_to_str(_df)
+            _df.convert_dtypes().to_parquet(args.out)
+            print(f"Concatenated {len(array)} histories to {args.out}")
+
 
         case "submit":
             if args.overwrite:
@@ -186,15 +218,11 @@ if __name__ == "__main__":
                 },
                 python="/work/dlclarge2/bergmane-pipeline-exps/exps/.eddie-venv/bin/python",
                 script_dir=result_dir / "slurm-scripts",
-                #sbatch=["sbatch",  "--bosch"],
+                # sbatch=["sbatch",  "--bosch"],
                 limit=1,
             )
         case "plot":
-            array = E1.as_array(experiments)
-            if any(exp.status() != "success" for exp in array):
-                print("Not all experiments are successful")
-                sys.exit(1)
-            _df = pd.concat([exp.history() for exp in array])
+            _df = pd.read_parquet(args.input)
             incumbent_traces(
                 _df,
                 y="metric:accuracy [0.0, 1.0] (maximize)",
@@ -202,12 +230,17 @@ if __name__ == "__main__":
                 std="setting:fold",
                 subplot="setting:task",
                 x="reported_at",
-                min_x="created_at",
+                x_start="created_at",
                 x_label="Time (s)",
                 y_label="Accuracy",
+                x_bounds=(0, TIME_SECONDS),
+                # y_bounds=(0, 1),
+                minimize=False,
+                metric_bounds=(0, 1),
+                log_y=True,
                 markevery=0.1,
             )
-            plt.show()
+            plt.savefig(args.out)
         case _:
             print("Unknown command")
             parser.print_help()
