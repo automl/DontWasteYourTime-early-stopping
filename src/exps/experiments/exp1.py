@@ -133,7 +133,10 @@ def run_it(run: E1) -> None:
             process_memory_limit=(run.memory_gb / run.n_cpus, "GB"),  # type: ignore
             process_walltime_limit=(run.time_seconds // run.minimum_trials, "m"),
         )
-        history.df().to_parquet(run.unique_path / "history.parquet")
+        _df = history.df()
+        _df.to_parquet(run.unique_path / "history.parquet")
+        if (_df["status"] == "fail").all():
+            raise RuntimeError(f"All configurations failed for {run}")
     except Exception as e:
         tb = traceback.format_exc()
         with (run.unique_path / "error.txt").open("w") as f:
