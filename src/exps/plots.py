@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
+from copy import copy
 
 MARKERS = [
     ".",
@@ -33,12 +35,16 @@ def incumbent_traces(
     df: pd.DataFrame,
     y: str,
     x: str,
-    min_x: str,
+    x_start: str,
     std: str,
     hue: str | list[str],
+    metric_bounds: tuple[float, float],
     subplot: str,  # TODO: list
     *,
     minimize: bool = False,
+    log_y: bool = False,
+    x_bounds: tuple[int | float | None, int | float | None] | None = None,
+    y_bounds: tuple[int | float | None, int | float | None] | None = None,
     axes: list[plt.Axes] | None = None,
     x_label: str | None = None,
     y_label: str | None = None,
@@ -73,11 +79,47 @@ def incumbent_traces(
             fold_traces: list[pd.Series] = []
             for _, std_group in hue_group.groupby(std):
                 # We now have each individual std group to plot, i.e. the fold
-                _start = std_group[min_x].min()
+                _start = std_group[x_start].min()
                 _x = (std_group[x] - _start).dt.total_seconds()
                 _y = std_group[y]
                 _s = pd.Series(_y.to_numpy(), index=_x).sort_index()
-                _s = _s.cummin() if minimize else _s.cummax()
+                lower, upper = metric_bounds
+
+                bounded = not np.isinf(lower) and not np.isinf(upper)
+                normalized: bool
+                inverted: bool
+
+                # Transform everything
+                match minimize, bounded:
+                    # Bounded metrics, 0-1 normalize
+                    case True, True:
+                        _s = _s.cummin()
+                        _s = (_s - lower) / (upper - lower)
+                        normalized = True
+                        inverted = False
+                    case True, False:
+                        _s = _s.cummin()
+                        normalized = False
+                        inverted = False
+                    case False, True:
+                        _s = _s.cummax()
+                        _s = (_s - lower) / (upper - lower)
+                        _s = 1 - _s
+                        normalized = True
+                        inverted = True
+                    case False, False:
+                        _s = _s.cummax()
+                        _s = -_s
+                        normalized = False
+                        inverted = True
+                    case _:
+                        raise RuntimeError("Shouldn't get here")
+
+                if x_bounds is not None and x_bounds[1] is not None:
+                    _new_index = np.concatenate([_s.index, [x_bounds[1]]])
+                    _new_values = np.concatenate([_s.to_numpy(), [_s.iloc[-1]]])
+                    _s = pd.Series(_new_values, _new_index)
+
                 fold_traces.append(_s)
 
             _hue_df = pd.concat(fold_traces, axis=1, sort=True).ffill().dropna()
@@ -90,7 +132,7 @@ def incumbent_traces(
                 color=color,
                 marker=marker,
                 label=hue_name,
-                markevery=5,
+                markevery=markevery,
             )
             ax.fill_between(
                 _means.index,
@@ -101,8 +143,23 @@ def incumbent_traces(
                 step="post",
             )
 
+        if x_bounds:
+            ax.set_xlim(*x_bounds)
+        if y_bounds:
+            ax.set_ylim(*y_bounds)
+
+        if log_y:
+            ax.set_yscale("log")
+
+        _y_label = copy(y_label)
+        if _y_label is not None:
+            if inverted:  # type: ignore
+                _y_label = f"{_y_label} | inverted"
+            if normalized:  # type: ignore
+                _y_label = f"{_y_label} | normalized"
+
         ax.set_xlabel(x_label if x_label is not None else x)
-        ax.set_ylabel(y_label if y_label is not None else y)
+        ax.set_ylabel(_y_label if _y_label is not None else y)
         ax.set_title(str(plot_name))
         ax.legend()
 
