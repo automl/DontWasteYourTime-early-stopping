@@ -86,6 +86,7 @@ class E1(Slurmable):
         pd.DataFrame | pd.Series,
     ]:
         from exps.data import get_fold
+        openml.config.set_root_cache_directory(self.openml_cache_directory)
 
         return get_fold(self.task, self.fold)
 
