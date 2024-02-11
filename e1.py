@@ -93,7 +93,7 @@ def path_col_to_str(_df: pd.DataFrame) -> pd.DataFrame:
 
 if __name__ == "__main__":
     tasks = amlb_classification
-    pipelines = ["rf_classifier", "mlp_classifier", "knn_classifier"]
+    pipelines = ["knn_classifier"]#["rf_classifier", "mlp_classifier", "knn_classifier"]
     result_dir = Path(f"results-{EXP_NAME}").resolve()
     log_dir = result_dir / "slurm-logs"
     script_dir = result_dir / "slurm-scripts"
