@@ -182,9 +182,9 @@ def run_it(run: E1) -> None:
             optimizer=OPTIMIZERS[run.optimizer],
             seed=run.experiment_seed,
             plugins=plugins,  # CV early stopping passed in here
-            process_memory_limit=(run.memory_gb / run.n_cpus, "GB"),  # type: ignore
-            process_walltime_limit=(run.time_seconds // run.minimum_trials, "m"),
-            threadpool_limit_ctl=True,
+            process_memory_limit=None,
+            process_walltime_limit=None,
+            threadpool_limit_ctl=False,
             max_trials=None,
             display=False,
             on_trial_exception="continue",  # Continue if a trial errors
