@@ -8,23 +8,19 @@ from typing import TYPE_CHECKING, ClassVar
 import openml
 import pandas as pd
 import sklearn
-from amltk import Metric
 from amltk.sklearn.evaluation import CVEvaluation
 
-from exps.pipelines import knn_classifier, mlp_classifier, rf_classifier
+from exps.methods import METHODS
+from exps.metrics import METRICS
+from exps.optimizers import OPTIMIZERS
+from exps.pipelines import PIPELINES
 from exps.slurm import Arg, Slurmable
 
 if TYPE_CHECKING:
     from amltk.sklearn.evaluation import TaskTypeName
 
 
-PIPELINES = {
-    "rf_classifier": rf_classifier,
-    "mlp_classifier": mlp_classifier,
-    "knn_classifier": knn_classifier,
-}
 OPENML_CACHE_DIRECTORY = Path(openml.config.get_cache_directory())
-EXPERIMENT_FIXED_SEED = 42
 
 
 @dataclass(kw_only=True)
@@ -32,32 +28,77 @@ class E1(Slurmable):
     EXP_NAME: ClassVar[str] = "experiment_cv_es"
     GROUPS_FOR_PATH: ClassVar[tuple[str, ...]] = ("task", "resources")
 
-    EXPERIMENT_SEED: int = field(
-        default=EXPERIMENT_FIXED_SEED,
-        metadata=Arg(help="The seed for the experiment", group="z-extra"),
+    experiment_seed: int = field(
+        metadata=Arg(
+            help="The seed for the experiment",
+            group="z-extra",
+        ),
     )
     # -- task
-    task: int = field(metadata=Arg(help="OpenML task id", group="task"))
-    fold: int = field(metadata=Arg(help="Fold number", group="task"))
+    task: int = field(
+        metadata=Arg(
+            help="OpenML task id",
+            group="task",
+        ),
+    )
+    fold: int = field(
+        metadata=Arg(
+            help="Fold number",
+            group="task",
+        ),
+    )
+    metric: str = field(
+        metadata=Arg(
+            help="Metric to optimize",
+            group="task",
+        ),
+    )
     pipeline: str = field(
         metadata=Arg(
             help="Name of the pipeline to use for the experiment",
-            choices=PIPELINES.keys(),
+            choices=list(PIPELINES),
+            group="task",
+        ),
+    )
+    optimizer: str = field(
+        metadata=Arg(
+            help="Name of the optimizer to use for the experiment",
+            choices=list(OPTIMIZERS),
             group="task",
         ),
     )
     n_splits: int = field(
-        metadata=Arg(help="Number of splits to use for cross validation", group="task"),
+        metadata=Arg(
+            help="Number of splits to use for cross validation",
+            group="task",
+        ),
     )
     cv_early_stop_strategy: str = field(
-        metadata=Arg(help="Early stop strategy", group="task", choices=["disabled"]),
+        metadata=Arg(
+            help="Early stop strategy",
+            group="task",
+            choices=list(METHODS),
+        ),
     )
 
     # -- resources
-    n_cpus: int = field(metadata=Arg(help="Number of cpus to use", group="resources"))
-    memory_gb: int = field(metadata=Arg(help="Memory in GB to use", group="resources"))
+    n_cpus: int = field(
+        metadata=Arg(
+            help="Number of cpus to use",
+            group="resources",
+        ),
+    )
+    memory_gb: int = field(
+        metadata=Arg(
+            help="Memory in GB to use",
+            group="resources",
+        ),
+    )
     time_seconds: int = field(
-        metadata=Arg(help="Time in seconds to use", group="resources"),
+        metadata=Arg(
+            help="Time in seconds to use",
+            group="resources",
+        ),
     )
     minimum_trials: int = field(
         metadata=Arg(
@@ -73,7 +114,10 @@ class E1(Slurmable):
     )
     openml_cache_directory: Path = field(
         default=OPENML_CACHE_DIRECTORY,
-        metadata=Arg(help="OpenML cache directory", group="paths"),
+        metadata=Arg(
+            help="OpenML cache directory",
+            group="paths",
+        ),
     )
 
     def get_data(
@@ -86,6 +130,7 @@ class E1(Slurmable):
         pd.DataFrame | pd.Series,
     ]:
         from exps.data import get_fold
+
         openml.config.set_root_cache_directory(self.openml_cache_directory)
 
         return get_fold(self.task, self.fold)
@@ -104,34 +149,46 @@ def run_it(run: E1) -> None:
     try:
         tt, X, _, y, _ = run.get_data()
         pipeline = PIPELINES[run.pipeline]
+        metric = METRICS[run.metric]
+        cv_early_stopping_method = METHODS[run.cv_early_stop_strategy]
 
-        if run.cv_early_stop_strategy.lower() not in ("disabled",):
-            raise NotImplementedError(
-                "Only 'none' is supported for cv_early_stop_strategy",
-            )
+        evaluator = CVEvaluation(
+            X,
+            y,
+            splitter="cv",
+            n_splits=run.n_splits,
+            random_state=run.experiment_seed,
+            working_dir=run.unique_path / "evaluator",
+            on_error="fail",
+            task_hint=tt,
+        )
+
+        if cv_early_stopping_method is not None:
+            plugins = [
+                evaluator.cv_early_stopping_plugin(
+                    strategy=cv_early_stopping_method(metric),
+                ),
+            ]
+        else:
+            plugins = []
+
         history = pipeline.optimize(
-            target=CVEvaluation(
-                X,
-                y,
-                splitter="cv",
-                n_splits=run.n_splits,
-                random_state=run.EXPERIMENT_SEED,
-                working_dir=run.unique_path / "evaluator",
-                on_error="fail",
-                task_hint=tt,
-            ),
-            metric=Metric("accuracy", minimize=False, bounds=(0, 1)),
-            timeout=run.time_seconds,
-            max_trials=None,
-            n_workers=run.n_cpus,
             working_dir=run.unique_path / "optimizer",
-            on_trial_exception="continue",
-            display=False,
+            target=evaluator.fn,
+            metric=metric,
+            timeout=run.time_seconds,
+            n_workers=run.n_cpus,
             wait=run.wait,
-            seed=run.EXPERIMENT_SEED,
-            threadpool_limit_ctl=True,
+            optimizer=OPTIMIZERS[run.optimizer],
+            seed=run.experiment_seed,
+            plugins=plugins,  # CV early stopping passed in here
             process_memory_limit=(run.memory_gb / run.n_cpus, "GB"),  # type: ignore
             process_walltime_limit=(run.time_seconds // run.minimum_trials, "m"),
+            threadpool_limit_ctl=True,
+            max_trials=None,
+            display=False,
+            on_trial_exception="continue",  # Continue if a trial errors
+            on_scheduler_exception="raise",  # End if the scheduler throws an exception
         )
         _df = history.df()
         _df.to_parquet(run.unique_path / "history.parquet")
