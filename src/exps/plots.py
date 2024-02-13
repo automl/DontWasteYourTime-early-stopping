@@ -29,6 +29,11 @@ MARKERS = [
     "|",
     "_",
 ]
+RENAMES = {
+    "disabled": "no-cv-es",
+    "current_average_worse_than_mean_best": "fold-worse-best-mean",
+    "current_average_worse_than_best_worst_split": "fold-worse-best-worst",
+}
 
 
 def incumbent_traces(
@@ -77,6 +82,8 @@ def incumbent_traces(
             # We now have each individual hue group to plot, i.e. the pipeline
 
             fold_traces: list[pd.Series] = []
+            counts = []
+            count_canceled = []
             for _, std_group in hue_group.groupby(std):
                 # We now have each individual std group to plot, i.e. the fold
                 _start = std_group[x_start].min()
@@ -84,6 +91,8 @@ def incumbent_traces(
                 _y = std_group[y]
                 _s = pd.Series(_y.to_numpy(), index=_x).sort_index()
                 lower, upper = metric_bounds
+                counts.append(len(_s))
+                count_canceled.append(_s.isna().sum())
 
                 bounded = not np.isinf(lower) and not np.isinf(upper)
                 normalized: bool
@@ -126,12 +135,21 @@ def incumbent_traces(
             _means = _hue_df.mean(axis=1)
             _stds = _hue_df.std(axis=1)
 
+            mean_count = np.mean(counts)
+            std_count = np.std(counts)
+            count_str = f"{mean_count}"
+            mean_cancelled = np.mean(count_canceled)
+            std_cancelled = np.std(count_canceled)
+            cancelled_str = f"{mean_cancelled}"
+
+            legend_name = RENAMES.get(hue_name, hue_name)
+
             _means.plot(
                 ax=ax,
                 drawstyle="steps-post",
                 color=color,
                 marker=marker,
-                label=hue_name,
+                label=f"{legend_name} ({count_str}, {cancelled_str}",
                 markevery=markevery,
             )
             ax.fill_between(

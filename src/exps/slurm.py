@@ -466,11 +466,13 @@ class ArraySlurmable(Sequence[T]):
         _df = _df.set_index(list(sorted_fields.index))
 
         if count is not None:
-            groupby_cols = [f for f in selected_fields if f not in count]
+            sorted_fields = unique_counts_per_selected.sort_values(ascending=True)
+            sorted_fields = sorted_fields.drop(index=count)
             return _df.reset_index().pivot_table(
-                index=groupby_cols,
+                index=list(sorted_fields.index),
                 columns="status",
                 values=count,
+                fill_value=0,
                 aggfunc="count",
             )
         return _df

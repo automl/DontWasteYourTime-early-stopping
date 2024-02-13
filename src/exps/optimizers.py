@@ -39,6 +39,21 @@ class RSOptimizer(Optimizer):
         super().__init__([metrics] if isinstance(metrics, Metric) else metrics, bucket)
 
     def _sample_one_next(self) -> Trial:
+        if self.n == 0:
+            default = self._space.default_configuration()
+            self.seen.add(default)
+            name = f"trial-{self.n}"
+            trial = Trial.create(
+                name=name,
+                config=dict(default),
+                info=None,
+                seed=self.seed,
+                bucket=self.bucket / name,
+                metrics=self.metrics,
+            )
+            self.n = self.n + 1
+            return trial
+
         for _ in range(self.retries):
             config = self._space.sample_configuration()
             if config not in self.seen:

@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 AMLB_CLASSIFICATION_FULL = [
-    2073,
+    # 2073,  # Fails to stratify split correctly due to not enough instances of a class
     3945,
-    7593,
+    # 7593,  # No configuration evaluated within 10 minutes
     10090,
     146818,
     146820,
@@ -17,8 +17,8 @@ AMLB_CLASSIFICATION_FULL = [
     168910,
     168911,
     189354,
-    189355,
-    189356,
+    # 189355,  # No configuration evaluated within 10 minutes
+    # 189356,  # No configuration evaluated within 10 minutes
     189922,
     190137,
     190146,
@@ -68,15 +68,15 @@ AMLB_CLASSIFICATION_FULL = [
     359991,
     359992,
     359993,
-    359994,
-    360112,
-    360113,
-    360114,
-    360975,
+    # 359994,  # No configuration evaluated within 10 minutes
+    # 360112,  # No configuration evaluated within 10 minutes
+    # 360113,  # No configuration evaluated within 10 minutes
+    # 360114,  # No configuration evaluated within 10 minutes
+    # 360975,  # No configuration evaluated within 10 minutes
 ]
 
 AMLB_CLASSIFICATION_SMALL_LESS_THAN_50K = [
-    2073,
+    # 2073,  # Fails to stratify split correctly due to not enough instances of a class
     146818,
     146820,
     168350,

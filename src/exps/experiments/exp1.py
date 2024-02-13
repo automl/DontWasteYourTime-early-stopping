@@ -16,6 +16,8 @@ from exps.optimizers import OPTIMIZERS
 from exps.pipelines import PIPELINES
 from exps.slurm import Arg, Slurmable
 
+from amltk.store import PathBucket
+
 if TYPE_CHECKING:
     from amltk.sklearn.evaluation import TaskTypeName
 
@@ -146,22 +148,22 @@ class E1(Slurmable):
 def run_it(run: E1) -> None:
     print(run)
     sklearn.set_config(enable_metadata_routing=False, transform_output="pandas")
-    try:
-        tt, X, _, y, _ = run.get_data()
-        pipeline = PIPELINES[run.pipeline]
-        metric = METRICS[run.metric]
-        cv_early_stopping_method = METHODS[run.cv_early_stop_strategy]
+    tt, X, _, y, _ = run.get_data()
+    pipeline = PIPELINES[run.pipeline]
+    metric = METRICS[run.metric]
+    cv_early_stopping_method = METHODS[run.cv_early_stop_strategy]
 
-        evaluator = CVEvaluation(
-            X,
-            y,
-            splitter="cv",
-            n_splits=run.n_splits,
-            random_state=run.experiment_seed,
-            working_dir=run.unique_path / "evaluator",
-            on_error="fail",
-            task_hint=tt,
-        )
+    evaluator = CVEvaluation(
+        X,
+        y,
+        splitter="cv",
+        n_splits=run.n_splits,
+        random_state=run.experiment_seed,
+        working_dir=run.unique_path / "evaluator",
+        on_error="fail",
+        task_hint=tt,
+    )
+    try:
 
         if cv_early_stopping_method is not None:
             plugins = [
@@ -192,6 +194,8 @@ def run_it(run: E1) -> None:
         )
         _df = history.df()
         _df.to_parquet(run.unique_path / "history.parquet")
+        if len(_df) == 0:
+            raise RuntimeError(f"No trial finished in time for {run}!")
         if (_df["status"] == "fail").all():
             raise RuntimeError(f"All configurations failed for {run}")
     except Exception as e:
@@ -200,6 +204,12 @@ def run_it(run: E1) -> None:
             f.write(f"{tb}\n{e}")
 
         raise e
+    finally:
+        try:
+            evaluator.bucket.rmdir()
+            PathBucket(run.unique_path / "optimizer").rmdir()
+        except Exception as e:  # noqa: BLE001
+            print(e)
 
 
 if __name__ == "__main__":

@@ -60,7 +60,7 @@ mlp_classifier = Sequential(
         config={
             "random_state": request("random_state", default=None),
             "warm_start": True,
-            "n_iter_no_change": 32,
+            "n_iter_no_change": 10,
             "validation_fraction": 0.1,
             "tol": 1e-4,
             "solver": "adam",
@@ -73,12 +73,14 @@ mlp_classifier = Sequential(
         config_transform=mlp_config_transform,
         space={
             "hidden_layer_depth": Integer("hidden_layer_depth", (1, 3), default=1),
+            "max_iter": Integer("max_iter", (10, 100), default=10),
             "num_nodes_per_layer": Integer(
                 "num_nodes_per_layer",
                 (16, 264),
-                default=32,
+                default=16,
                 log=True,
             ),
+            "momentum": (0.8, 1),
             "activation": ["relu", "tanh"],
             "alpha": Float("alpha", (1e-7, 1e-1), default=1e-4, log=True),
             "learning_rate_init": Float(

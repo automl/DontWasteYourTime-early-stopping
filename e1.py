@@ -22,7 +22,7 @@ def path_col_to_str(_df: pd.DataFrame) -> pd.DataFrame:
 
 
 EXP_NAME: TypeAlias = Literal["debug", "small", "full"]
-EXP_CHOICES = ["debug", "full"]
+EXP_CHOICES = ["debug", "small", "full"]
 
 
 def experiment_set(name: EXP_NAME) -> list[E1]:
@@ -64,10 +64,9 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
         case "full":
             pipeline = "mlp_classifier"
             folds = list(range(10))
-            n_splits = [3, 5, 10]
+            n_splits = [10]  # Set to 10, see if we can even evaluate a full model
             suite = TASKS["amlb_classification_full"]
-            # CONSTANTS
-            optimizers = ["random_search", "smac"]
+            optimizers = ["random_search"] #, "smac"]
             methods = list(METHODS.keys())
             mem_per_cpu_gb = 4
             time_seconds = 10 * 60
@@ -153,6 +152,9 @@ def main():
 
     match args.command:
         case "status":
+            pd.set_option("display.max_colwidth", None)
+            pd.set_option("display.max_rows", None)
+            pd.set_option("display.max_columns", None)
             array = E1.as_array(experiments)
             status = array.status(
                 exclude=["root", "openml_cache_directory"],
@@ -250,19 +252,19 @@ def main():
             _df = pd.read_parquet(args.input)
             incumbent_traces(
                 _df,
-                y="metric:accuracy [0.0, 1.0] (maximize)",
-                hue="setting:pipeline",
+                y="metric:roc_auc_ovr [0.0, 1.0] (maximize)",
+                hue="setting:cv_early_stop_strategy",
                 std="setting:fold",
                 subplot="setting:task",
                 x="reported_at",
                 x_start="created_at",
                 x_label="Time (s)",
-                y_label="Accuracy",
-                x_bounds=(0, TIME_SECONDS),
+                y_label="ROC AUC (OVR)",
+                x_bounds=(0, 10*60),
                 # y_bounds=(0, 1),
                 minimize=False,
                 metric_bounds=(0, 1),
-                log_y=True,
+                log_y=False,
                 markevery=0.1,
             )
             plt.savefig(args.out)
