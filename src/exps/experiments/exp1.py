@@ -9,14 +9,13 @@ import openml
 import pandas as pd
 import sklearn
 from amltk.sklearn.evaluation import CVEvaluation
+from amltk.store import PathBucket
 
 from exps.methods import METHODS
 from exps.metrics import METRICS
 from exps.optimizers import OPTIMIZERS
 from exps.pipelines import PIPELINES
 from exps.slurm import Arg, Slurmable
-
-from amltk.store import PathBucket
 
 if TYPE_CHECKING:
     from amltk.sklearn.evaluation import TaskTypeName
@@ -135,7 +134,12 @@ class E1(Slurmable):
 
         openml.config.set_root_cache_directory(self.openml_cache_directory)
 
-        return get_fold(self.task, self.fold)
+        return get_fold(
+            self.task,
+            self.fold,
+            seed=self.experiment_seed,
+            n_splits=self.n_splits,
+        )
 
     def history(self) -> pd.DataFrame:
         _df = pd.read_parquet(self.unique_path / "history.parquet")
@@ -164,7 +168,6 @@ def run_it(run: E1) -> None:
         task_hint=tt,
     )
     try:
-
         if cv_early_stopping_method is not None:
             plugins = [
                 evaluator.cv_early_stopping_plugin(

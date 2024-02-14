@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 def get_fold(
     openml_task_id: int,
     fold: int,
+    n_splits: int,
+    seed: int | None = None,
 ) -> tuple[
     TaskTypeName,
     pd.DataFrame,
@@ -21,6 +23,16 @@ def get_fold(
     pd.DataFrame | pd.Series,
     pd.DataFrame | pd.Series,
 ]:
+    """Get the data for a specific fold of an OpenML task.
+
+    Args:
+        openml_task_id: The OpenML task id.
+        fold: The fold number.
+        n_splits: The number of splits that will be applied. This is used
+            to resample training data such that enough at least instance for each class
+            is present for every stratified split.
+        seed: The random seed to use for reproducibility of resampling if necessary.
+    """
     task = openml.tasks.get_task(
         openml_task_id,
         download_splits=True,
@@ -32,6 +44,37 @@ def get_fold(
     X, y = task.get_X_and_y(dataset_format="dataframe")  # type: ignore
     X_train, y_train = X.iloc[train_idx], y.iloc[train_idx]
     X_test, y_test = X.iloc[test_idx], y.iloc[test_idx]
+
+    # If we are in binary/multilclass setting and there is not enough instances
+    # with a given label to perform stratified sampling with `n_splits`, we first
+    # find these labels, take the first N instances which have these labels and allows
+    # us to reach `n_splits` instances for each label.
+    indices_to_resample = None
+    if y_train.ndim == 1:
+        label_counts = y_train.value_counts()
+        under_represented_labels = label_counts[label_counts < n_splits]
+
+        collected_indices = []
+        if any(under_represented_labels):
+            under_rep_instances = y_train[y_train.isin(under_represented_labels)]
+
+            grouped_by_label = under_rep_instances.to_frame("label").groupby("label")
+            for _label, instances_with_label in grouped_by_label:
+                n_to_take = n_splits - len(instances_with_label)
+
+                need_to_sample_repeatedly = n_to_take > len(instances_with_label)
+                resampled_instances = instances_with_label.sample(
+                    n=n_to_take,
+                    random_state=seed,
+                    # It could be that we have to repeat sample if there are not enough
+                    # instances to hit `n_splits` for a given label.
+                    replace=need_to_sample_repeatedly,
+                )
+                collected_indices.append(resampled_instances.index)
+
+    if indices_to_resample is not None:
+        X_train = X_train.append(X_train.iloc[indices_to_resample])
+        y_train = y_train.append(y_train.iloc[indices_to_resample])
 
     match task.task_type_id:
         case TaskType.SUPERVISED_CLASSIFICATION:
