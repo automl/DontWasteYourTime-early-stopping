@@ -4,10 +4,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import openml
+import pandas as pd
 from openml.tasks.task import TaskType
 
 if TYPE_CHECKING:
-    import pandas as pd
     from amltk.sklearn.evaluation import TaskTypeName
 
 
@@ -73,11 +73,26 @@ def get_fold(
                     # instances to hit `n_splits` for a given label.
                     replace=need_to_sample_repeatedly,
                 )
-                collected_indices.append(resampled_instances.index)
+                collected_indices.append(np.asarray(resampled_instances.index))
+
+            indices_to_resample = np.concatenate(collected_indices)
 
     if indices_to_resample is not None:
-        X_train = X_train.append(X_train.iloc[indices_to_resample])
-        y_train = y_train.append(y_train.iloc[indices_to_resample])
+        # Give the new samples a new index to not overlap with the original data.
+        new_start_idx = X_train.index.max() + 1
+        new_end_idx = new_start_idx + len(indices_to_resample)
+        new_idx = pd.RangeIndex(start=new_start_idx, stop=new_end_idx)
+        resampled_X = X_train.loc[indices_to_resample].set_index(new_idx)
+        resampled_y = y_train.loc[indices_to_resample].set_axis(new_idx)
+        X_train = pd.concat([X_train, resampled_X])
+        y_train = pd.concat([y_train, resampled_y])
+
+    if y_train.value_counts().min() < n_splits:
+        raise RuntimeError(
+            "Not enough instances for stratified sampling, something went wrong"
+            "\n"
+            f"y_train.value_counts():\n{y_train.value_counts()}",
+        )
 
     match task.task_type_id:
         case TaskType.SUPERVISED_CLASSIFICATION:
