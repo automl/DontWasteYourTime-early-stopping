@@ -3,11 +3,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from amltk.pipeline import Component, Sequential, Split, request
+from amltk.pipeline import Component, Sequential, Split, request, Choice
 from ConfigSpace import Float, Integer
 from sklearn.impute import SimpleImputer
 from sklearn.neural_network import MLPClassifier
-from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, OrdinalEncoder
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
 
 
 def mlp_config_transform(config: Mapping[str, Any], _: Any) -> Mapping[str, Any]:
@@ -33,15 +33,18 @@ mlp_classifier = Sequential(
                         "unknown_value": -1,
                     },
                 ),
-                Component(
-                    OneHotEncoder,
-                    space={"max_categories": (2, 20)},
-                    config={
-                        "categories": request("categories", default="auto"),
-                        "drop": None,
-                        "sparse_output": False,
-                        "handle_unknown": "infrequent_if_exist",
-                    },
+                Choice(
+                    "passthrough",
+                    Component(
+                        OneHotEncoder,
+                        space={"max_categories": (2, 20)},
+                        config={
+                            "categories": request("categories", default="auto"),
+                            "drop": None,
+                            "sparse_output": False,
+                            "handle_unknown": "infrequent_if_exist",
+                        },
+                    ),
                 ),
             ],
             "numerical": Component(
@@ -51,16 +54,13 @@ mlp_classifier = Sequential(
         },
         name="encoding",
     ),
-    Split(
-        Component(MinMaxScaler, name="numerical"),
-        name="scaling",
-    ),
+    Component(StandardScaler, name="standarization"),
     Component(
         item=MLPClassifier,
         config={
             "random_state": request("random_state", default=None),
-            "warm_start": True,
-            "n_iter_no_change": 10,
+            "warm_start": False,
+            "n_iter_no_change": 32,
             "validation_fraction": 0.1,
             "tol": 1e-4,
             "solver": "adam",
@@ -73,16 +73,17 @@ mlp_classifier = Sequential(
         config_transform=mlp_config_transform,
         space={
             "hidden_layer_depth": Integer("hidden_layer_depth", (1, 3), default=1),
-            "max_iter": Integer("max_iter", (10, 100), default=10),
+            "max_iter": [100, 200, 500, 1000],
             "num_nodes_per_layer": Integer(
                 "num_nodes_per_layer",
-                (16, 264),
-                default=16,
+                (16, 1024),
+                default=32,
                 log=True,
             ),
             "momentum": (0.8, 1),
             "activation": ["relu", "tanh"],
             "alpha": Float("alpha", (1e-7, 1e-1), default=1e-4, log=True),
+            "learning_rate": ["constant", "invscaling", "adaptive"],
             "learning_rate_init": Float(
                 "learning_rate_init",
                 (1e-4, 0.5),
