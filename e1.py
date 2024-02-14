@@ -11,7 +11,7 @@ from rich import print
 
 from exps.experiments.exp1 import E1
 from exps.methods import METHODS
-from exps.plots import incumbent_traces
+from exps.plots import baseline_normalized_over_time, incumbent_traces, rank_plots
 from exps.slurm import seconds_to_slurm_time
 from exps.tasks import TASKS
 
@@ -66,7 +66,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             folds = list(range(10))
             n_splits = [10]  # Set to 10, see if we can even evaluate a full model
             suite = TASKS["amlb_classification_full"]
-            optimizers = ["random_search"] #, "smac"]
+            optimizers = ["random_search"]  # , "smac"]
             methods = list(METHODS.keys())
             mem_per_cpu_gb = 4
             time_seconds = 10 * 60
@@ -135,11 +135,84 @@ def main():
         p.add_argument("--out", type=Path, required=True)
 
     with cmds("plot") as p:
-        p.add_argument("--expname", choices=EXP_CHOICES, type=str, required=True)
         p.add_argument("--out", type=Path, required=True)
-        p.add_argument("input", type=Path)
+        p.add_argument(
+            "--kind",
+            type=str,
+            choices=["incumbent", "baseline-normalized", "ranks"],
+        )
+        p.add_argument(
+            "input",
+            type=Path,
+            help="The path to the `collect`'ed experiment name",
+        )
+
+    with cmds("plot-normalized-baseline") as p:
+        p.add_argument("--out", type=Path, required=True)
+        p.add_argument(
+            "input",
+            type=Path,
+            help="The path to the `collect`'ed experiment name",
+        )
 
     args = parser.parse_args()
+    if args.command == "plot":
+        _df = pd.read_parquet(args.input)
+        match args.kind:
+            case "incumbent":
+                incumbent_traces(
+                    _df,
+                    y="metric:roc_auc_ovr [0.0, 1.0] (maximize)",
+                    hue="setting:cv_early_stop_strategy",
+                    std="setting:fold",
+                    subplot="setting:task",
+                    x="reported_at",
+                    x_start="created_at",
+                    x_label="Time (s)",
+                    y_label="ROC AUC (OVR)",
+                    x_bounds=(0, 10 * 60),
+                    minimize=False,
+                    log_y=False,
+                    markevery=0.1,
+                )
+            case "ranks":
+                rank_plots(
+                    _df,
+                    y="metric:roc_auc_ovr [0.0, 1.0] (maximize)",
+                    hue="setting:cv_early_stop_strategy",
+                    std="setting:fold",
+                    subplot="setting:task",
+                    x="reported_at",
+                    x_start="created_at",
+                    x_label="Time (s)",
+                    y_label="Mean Rank",
+                    x_bounds=(0, 10 * 60),
+                    minimize=False,
+                    log_y=False,
+                    markevery=0.1,
+                )
+            case "baseline-normalized":
+                baseline_normalized_over_time(
+                    _df,
+                    y="metric:roc_auc_ovr [0.0, 1.0] (maximize)",
+                    baseline="disabled",
+                    hue="setting:cv_early_stop_strategy",
+                    std="setting:fold",
+                    subplot="setting:task",
+                    x="reported_at",
+                    x_start="created_at",
+                    x_label="Time (s)",
+                    y_label="ROC AUC (shifted)",
+                    x_bounds=(0, 10 * 60),
+                    minimize=False,
+                    metric_bounds=(0, 1),
+                    log_y=False,
+                    markevery=0.1,
+                )
+            case _:
+                print(f"Unknown kind {args.kind}")
+        plt.savefig(args.out)
+        return
 
     experiments = experiment_set(args.expname)
     result_dir = Path(f"results-{args.expname}").resolve()
@@ -248,26 +321,6 @@ def main():
                 sbatch=["sbatch", "--bosch"],
                 limit=1,
             )
-        case "plot":
-            _df = pd.read_parquet(args.input)
-            incumbent_traces(
-                _df,
-                y="metric:roc_auc_ovr [0.0, 1.0] (maximize)",
-                hue="setting:cv_early_stop_strategy",
-                std="setting:fold",
-                subplot="setting:task",
-                x="reported_at",
-                x_start="created_at",
-                x_label="Time (s)",
-                y_label="ROC AUC (OVR)",
-                x_bounds=(0, 10*60),
-                # y_bounds=(0, 1),
-                minimize=False,
-                metric_bounds=(0, 1),
-                log_y=False,
-                markevery=0.1,
-            )
-            plt.savefig(args.out)
         case _:
             print("Unknown command")
             parser.print_help()
