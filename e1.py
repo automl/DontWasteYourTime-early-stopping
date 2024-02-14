@@ -66,7 +66,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             folds = list(range(10))
             n_splits = [10]  # Set to 10, see if we can even evaluate a full model
             suite = TASKS["amlb_classification_full"]
-            optimizers = ["random_search"]  # , "smac"]
+            optimizers = ["random_search", "smac"]
             methods = list(METHODS.keys())
             mem_per_cpu_gb = 4
             time_seconds = 10 * 60
@@ -110,7 +110,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
     ]
 
 
-def main():
+def main():  # noqa: C901, PLR0915, PLR0912
     parser, cmds = E1.parser(["status", "run", "submit"])
 
     with cmds("run") as p:

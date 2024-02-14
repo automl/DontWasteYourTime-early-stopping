@@ -40,7 +40,7 @@ class RSOptimizer(Optimizer):
 
     def _sample_one_next(self) -> Trial:
         if self.n == 0:
-            default = self._space.default_configuration()
+            default = self._space.get_default_configuration()
             self.seen.add(default)
             name = f"trial-{self.n}"
             trial = Trial.create(
