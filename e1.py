@@ -21,8 +21,8 @@ def path_col_to_str(_df: pd.DataFrame) -> pd.DataFrame:
     return _df.astype({k: pd.StringDtype() for k in path_dtypes})
 
 
-EXP_NAME: TypeAlias = Literal["debug", "small", "full"]
-EXP_CHOICES = ["debug", "small", "full"]
+EXP_NAME: TypeAlias = Literal["debug", "small", "full", "time-analysis"]
+EXP_CHOICES = ["debug", "small", "full", "time-analysis"]
 
 
 def experiment_set(name: EXP_NAME) -> list[E1]:
@@ -36,7 +36,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             n_splits = [10]
             folds = [0]  # We only need 1 outfold from openml to analise
             n_cpu = 1
-            mem_per_cpu_gb = 4
+            mem_per_cpu_gb = 6
             time_seconds = 4 * 60 * 60
             minimum_trials = 1
             optimizers = ["random_search"]
@@ -49,7 +49,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             n_splits = [5]
             folds = [0]
             n_cpu = 1
-            mem_per_cpu_gb = 4
+            mem_per_cpu_gb = 6
             time_seconds = 30
             minimum_trials = 1
             optimizers = ["random_search"]
@@ -66,7 +66,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             n_splits = [5]
             folds = list(range(10))
             n_cpu = 1
-            mem_per_cpu_gb = 4
+            mem_per_cpu_gb = 6
             time_seconds = 10 * 60
             minimum_trials = 1
             optimizers = ["random_search"]
@@ -86,7 +86,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             suite = TASKS["amlb_classification_full"]
             optimizers = ["random_search", "smac"]
             methods = list(METHODS.keys())
-            mem_per_cpu_gb = 4
+            mem_per_cpu_gb = 6
             time_seconds = 10 * 60
             n_cpu = 1
             minimum_trials = 1
