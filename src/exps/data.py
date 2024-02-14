@@ -56,9 +56,12 @@ def get_fold(
 
         collected_indices = []
         if any(under_represented_labels):
-            under_rep_instances = y_train[y_train.isin(under_represented_labels)]
+            under_rep_instances = y_train[y_train.isin(under_represented_labels.index)]
 
-            grouped_by_label = under_rep_instances.to_frame("label").groupby("label")
+            grouped_by_label = under_rep_instances.to_frame("label").groupby(
+                "label",
+                observed=True,  # Handles categoricals
+            )
             for _label, instances_with_label in grouped_by_label:
                 n_to_take = n_splits - len(instances_with_label)
 
