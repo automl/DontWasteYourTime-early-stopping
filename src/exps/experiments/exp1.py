@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import traceback
+from asyncio import Future
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
@@ -9,7 +10,6 @@ import openml
 import pandas as pd
 import sklearn
 from amltk.sklearn.evaluation import CVEvaluation
-from amltk.store import PathBucket
 
 from exps.methods import METHODS
 from exps.metrics import METRICS
@@ -18,6 +18,7 @@ from exps.pipelines import PIPELINES
 from exps.slurm import Arg, Slurmable
 
 if TYPE_CHECKING:
+    from amltk.optimization import Trial
     from amltk.sklearn.evaluation import TaskTypeName
 
 
@@ -177,13 +178,11 @@ def run_it(run: E1) -> None:
         else:
             plugins = []
 
-        history = pipeline.optimize(
+        scheduler, task, history = pipeline.register_optimization_loop(
             working_dir=run.unique_path / "optimizer",
             target=evaluator.fn,
             metric=metric,
-            timeout=run.time_seconds,
             n_workers=run.n_cpus,
-            wait=run.wait,
             optimizer=OPTIMIZERS[run.optimizer],
             seed=run.experiment_seed,
             plugins=plugins,  # CV early stopping passed in here
@@ -191,16 +190,33 @@ def run_it(run: E1) -> None:
             process_walltime_limit=None,
             threadpool_limit_ctl=False,
             max_trials=None,
-            display=False,
             on_trial_exception="continue",  # Continue if a trial errors
-            on_scheduler_exception="raise",  # End if the scheduler throws an exception
+        )
+
+        # Make sure to cleanup after trials if we do not have anything stored
+        # (most often the case) such that we do not blow up the filesystem with
+        # empty folders.
+        @task.on_result
+        def _cleanup_after_trial(_: Future, report: Trial.Report) -> None:
+            if not any(report.bucket.keys()):
+                report.bucket.rmdir()
+
+        scheduler.run(
+            timeout=run.time_seconds,
+            wait=run.wait,
+            on_exception="raise",
+            display=False,
         )
         _df = history.df()
         _df.to_parquet(run.unique_path / "history.parquet")
         if len(_df) == 0:
             raise RuntimeError(f"No trial finished in time for {run}!")
         if (_df["status"] == "fail").all():
-            raise RuntimeError(f"All configurations failed for {run}")
+            exceptions = _df["exception"]
+            raise RuntimeError(
+                f"All configurations failed for {run}\n"
+                + "\n".join(map(str, exceptions)),
+            )
     except Exception as e:
         tb = traceback.format_exc()
         with (run.unique_path / "error.txt").open("w") as f:
@@ -209,9 +225,10 @@ def run_it(run: E1) -> None:
         raise e
     finally:
         try:
+            # Remove the data
             evaluator.bucket.rmdir()
-            PathBucket(run.unique_path / "optimizer").rmdir()
         except Exception as e:  # noqa: BLE001
+            # We do not want to raise here as it's just cleanup
             print(e)
 
 
