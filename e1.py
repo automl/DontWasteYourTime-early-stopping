@@ -27,6 +27,24 @@ EXP_CHOICES = ["debug", "small", "full"]
 
 def experiment_set(name: EXP_NAME) -> list[E1]:
     match name:
+        case "time-analysis":
+            # This suite runs the full automlbenchmark with our maximum cv splits, such
+            # that we can see how many trials can be evaluated in a given time frame.
+            # This will allow use to bin the datasets according to "size" where size
+            # dictates how much time we run optimization for, effectively giving us
+            # different categories of datasets with which to compare our results.
+            n_splits = [10]
+            folds = [0]  # We only need 1 outfold from openml to analise
+            n_cpu = 1
+            mem_per_cpu_gb = 4
+            time_seconds = 4 * 60 * 60
+            minimum_trials = 1
+            optimizers = ["random_search"]
+            suite = TASKS["amlb_classification_full"]
+            pipeline = "mlp_classifier"
+            metric = "roc_auc_ovr"
+            methods = ["disabled"]
+            experiment_fixed_seed = 42
         case "debug":
             n_splits = [5]
             folds = [0]
