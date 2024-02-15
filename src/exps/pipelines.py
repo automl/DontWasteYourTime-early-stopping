@@ -31,6 +31,7 @@ mlp_classifier = Sequential(
                         "categories": "auto",
                         "handle_unknown": "use_encoded_value",
                         "unknown_value": -1,
+                        "encoded_missing_value": -2,
                     },
                 ),
                 Choice(
@@ -45,6 +46,7 @@ mlp_classifier = Sequential(
                             "handle_unknown": "infrequent_if_exist",
                         },
                     ),
+                    name="one_hot"
                 ),
             ],
             "numerical": Component(
