@@ -153,7 +153,7 @@ class E1(Slurmable):
 def run_it(run: E1) -> None:
     print(run)
     sklearn.set_config(enable_metadata_routing=False, transform_output="pandas")
-    tt, X, _, y, _ = run.get_data()
+    task_type, X, X_test, y, y_test = run.get_data()
     pipeline = PIPELINES[run.pipeline]
     metric = METRICS[run.metric]
     cv_early_stopping_method = METHODS[run.cv_early_stop_strategy]
@@ -166,7 +166,11 @@ def run_it(run: E1) -> None:
         random_state=run.experiment_seed,
         working_dir=run.unique_path / "evaluator",
         on_error="fail",
-        task_hint=tt,
+        X_test=X_test,
+        y_test=y_test,
+        train_score=False,
+        store_models=False,
+        task_hint=task_type,
     )
     try:
         if cv_early_stopping_method is not None:
