@@ -71,14 +71,14 @@ mlp_classifier = Sequential(
             "beta_1": 0.9,
             "beta_2": 0.999,
             "epsilon": 1e-8,
+            "max_iter": 512,
         },
         config_transform=mlp_config_transform,
         space={
             "hidden_layer_depth": Integer("hidden_layer_depth", (1, 3), default=1),
-            "max_iter": [100, 200, 500, 1000],
             "num_nodes_per_layer": Integer(
                 "num_nodes_per_layer",
-                (16, 1024),
+                (16, 264),
                 default=32,
                 log=True,
             ),
