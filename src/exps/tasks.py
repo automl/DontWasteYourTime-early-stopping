@@ -69,10 +69,10 @@ AMLB_CLASSIFICATION_FULL = [
     359992,
     359993,
     359994,  # No configuration evaluated within 10 minutes
-    360112,  # No configuration evaluated within 10 minutes
+    # 360112,  # OOM w/ 5GB
     360113,  # No configuration evaluated within 10 minutes
     360114,  # No configuration evaluated within 10 minutes
-    360975,  # No configuration evaluated within 10 minutes
+    # 360975,  # OOM w/ 5GB
 ]
 
 AMLB_CLASSIFICATION_SMALL_LESS_THAN_50K = [
