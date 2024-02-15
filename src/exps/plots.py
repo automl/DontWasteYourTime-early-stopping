@@ -238,8 +238,9 @@ def incumbent_traces(  # noqa: PLR0913
         hue_dfs: dict[str, pd.DataFrame] = {}
         for hue_name, hue_group in plot_group.groupby(hue):
             hue_inc_traces = []
-            for _, _std_group in hue_group.groupby(std):
+            for _std_name, _std_group in hue_group.groupby(std):
                 inc_trace = _inc_trace(
+                    _std_name,
                     _std_group,
                     x_start_col=x_start,
                     x_col=x,
