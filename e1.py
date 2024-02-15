@@ -21,8 +21,8 @@ def path_col_to_str(_df: pd.DataFrame) -> pd.DataFrame:
     return _df.astype({k: pd.StringDtype() for k in path_dtypes})
 
 
-EXP_NAME: TypeAlias = Literal["debug", "small", "full", "time-analysis"]
-EXP_CHOICES = ["debug", "small", "full", "time-analysis"]
+EXP_NAME: TypeAlias = Literal["debug", "small", "full", "time-analysis", "category1"]
+EXP_CHOICES = ["debug", "small", "full", "time-analysis", "category1"]
 
 
 def experiment_set(name: EXP_NAME) -> list[E1]:
@@ -44,6 +44,20 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             pipeline = "mlp_classifier"
             metric = "roc_auc_ovr"
             methods = ["disabled"]
+            experiment_fixed_seed = 42
+        case "category1":
+            # This suite is running everything that had more
+            # than 50 trials after 4 hours of 10 fold cross-validation
+            n_splits = [5, 10]  # TODO: Likely need another one here
+            folds = list(range(10))
+            n_cpu = 1
+            mem_per_cpu_gb = 5
+            time_seconds = 4 * 60 * 60
+            optimizers = ["random_search"]  # TODO: SMAC
+            methods = ["disabled"]
+            suite = TASKS["amlb_4hr_10cv_more_than_50_trials"]
+            pipeline = "mlp_classifier"
+            metric = "roc_auc_ovr"
             experiment_fixed_seed = 42
         case "debug":
             n_splits = [5]

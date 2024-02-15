@@ -143,7 +143,7 @@ class CVEarlyStopCurrentAverageWorseThanBestWorstSplit:
         split_scores = [
             float(v)
             for k, v in self.best.summary.items()
-            if k.startswith("split_") and "train" not in k
+            if k.startswith("split_") and "train" not in k and "test" not in k
         ]
         worst_fold_score_of_best = min(split_scores)
         match self.metric.compare(challenger, worst_fold_score_of_best):
