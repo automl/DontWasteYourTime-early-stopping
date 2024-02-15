@@ -207,22 +207,16 @@ class Slurmable(Parsable):
         )
 
         group.add_argument(
-            "--mem-per-cpu",
+            "--mem",
             type=str,
             required=True,
-            help="Memory per cpu",
+            help="Memory total",
         )
         group.add_argument(
             "--time",
             type=str,
             required=True,
             help="Time for the job",
-        )
-        group.add_argument(
-            "--ntasks",
-            type=int,
-            default=1,
-            help="Number of tasks to run, defaults to `1`",
         )
         group.add_argument(
             "--cpus-per-task",

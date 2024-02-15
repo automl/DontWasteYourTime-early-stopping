@@ -36,7 +36,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             n_splits = [10]
             folds = [0]  # We only need 1 outfold from openml to analise
             n_cpu = 1
-            mem_per_cpu_gb = 6
+            mem_per_cpu_gb = 5
             time_seconds = 4 * 60 * 60
             minimum_trials = 1
             optimizers = ["random_search"]
@@ -49,7 +49,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             n_splits = [5]
             folds = [0]
             n_cpu = 1
-            mem_per_cpu_gb = 6
+            mem_per_cpu_gb = 5
             time_seconds = 30
             minimum_trials = 1
             optimizers = ["random_search"]
@@ -66,7 +66,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             n_splits = [5]
             folds = list(range(10))
             n_cpu = 1
-            mem_per_cpu_gb = 6
+            mem_per_cpu_gb = 5
             time_seconds = 10 * 60
             minimum_trials = 1
             optimizers = ["random_search"]
@@ -86,7 +86,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             suite = TASKS["amlb_classification_full"]
             optimizers = ["random_search", "smac"]
             methods = list(METHODS.keys())
-            mem_per_cpu_gb = 6
+            mem_per_cpu_gb = 5
             time_seconds = 10 * 60
             n_cpu = 1
             minimum_trials = 1
@@ -320,16 +320,14 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     sys.exit(0)
 
             first = experiments[0]
-
             array.submit(
                 name=args.expname,
                 slurm_headers={
                     "partition": "bosch_cpu-cascadelake",
-                    "mem-per-cpu": f"{first.memory_gb}G",
+                    "mem": f"{first.memory_gb}G",
                     "time": seconds_to_slurm_time(
                         int(5 * 60 + first.time_seconds * 1.2),
                     ),
-                    "ntasks": 1,
                     "cpus-per-task": first.n_cpus,
                     "output": str(log_dir / "%j-%a.out"),
                     "error": str(log_dir / "%j-%a.err"),
