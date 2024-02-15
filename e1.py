@@ -38,7 +38,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             n_cpu = 1
             mem_per_cpu_gb = 5
             time_seconds = 4 * 60 * 60
-            minimum_trials = 1
             optimizers = ["random_search"]
             suite = TASKS["amlb_classification_full"]
             pipeline = "mlp_classifier"
@@ -53,8 +52,15 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             n_cpu = 1
             mem_per_cpu_gb = 5
             time_seconds = 4 * 60 * 60
-            optimizers = ["random_search"]  # TODO: SMAC
-            methods = ["disabled"]
+            optimizers = [
+                "random_search",
+            ]  # TODO: SMAC
+            methods = [
+                "disabled",
+                "current_average_worse_than_mean_best",
+                "current_average_worse_than_best_worst_split",
+                "mean_outside_1_std_of_top_3",
+            ]
             suite = TASKS["amlb_4hr_10cv_more_than_50_trials"]
             pipeline = "mlp_classifier"
             metric = "roc_auc_ovr"
@@ -65,7 +71,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             n_cpu = 1
             mem_per_cpu_gb = 5
             time_seconds = 30
-            minimum_trials = 1
             optimizers = ["random_search"]
             suite = TASKS["debug"]
             pipeline = "mlp_classifier"
@@ -82,7 +87,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             n_cpu = 1
             mem_per_cpu_gb = 5
             time_seconds = 10 * 60
-            minimum_trials = 1
             optimizers = ["random_search"]
             suite = TASKS["amlb_classification_less_than_50k"]
             pipeline = "mlp_classifier"
@@ -103,7 +107,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             mem_per_cpu_gb = 5
             time_seconds = 10 * 60
             n_cpu = 1
-            minimum_trials = 1
             metric = "roc_auc_ovr"
             experiment_fixed_seed = 42
         case _:
@@ -124,7 +127,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             memory_gb=mem_per_cpu_gb * n_cpu,
             time_seconds=time_seconds,
             experiment_seed=experiment_fixed_seed,
-            minimum_trials=minimum_trials,
+            minimum_trials=1,  # Takes no effect...
             metric=metric,
             # Extra
             wait=False,
