@@ -32,7 +32,7 @@ EXP_NAME: TypeAlias = Literal[
 EXP_CHOICES = ["debug", "small", "full", "time-analysis", "category1", "category2"]
 
 
-def experiment_set(name: EXP_NAME) -> list[E1]:
+def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
     match name:
         case "time-analysis":
             # This suite runs the full automlbenchmark with our maximum cv splits, such
@@ -59,8 +59,15 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             n_cpu = 1
             mem_per_cpu_gb = 5
             time_seconds = 4 * 60 * 60
-            optimizers = ["random_search"]  # TODO: SMAC
-            methods = ["disabled"]
+            optimizers = [
+                "random_search",
+            ]  # TODO: SMAC
+            methods = [
+                "disabled",
+                "current_average_worse_than_mean_best",
+                "current_average_worse_than_best_worst_split",
+                "mean_outside_1_std_of_top_3",
+            ]
             suite = TASKS["amlb_4hr_10cv_more_than_50_trials"]
             pipeline = "mlp_classifier"
             metric = "roc_auc_ovr"
@@ -149,7 +156,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             memory_gb=mem_per_cpu_gb * n_cpu,
             time_seconds=time_seconds,
             experiment_seed=experiment_fixed_seed,
-            minimum_trials=1,
+            minimum_trials=1,  # Takes no effect...
             metric=metric,
             # Extra
             wait=False,
