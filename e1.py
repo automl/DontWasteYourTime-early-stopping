@@ -21,8 +21,15 @@ def path_col_to_str(_df: pd.DataFrame) -> pd.DataFrame:
     return _df.astype({k: pd.StringDtype() for k in path_dtypes})
 
 
-EXP_NAME: TypeAlias = Literal["debug", "small", "full", "time-analysis", "category1"]
-EXP_CHOICES = ["debug", "small", "full", "time-analysis", "category1"]
+EXP_NAME: TypeAlias = Literal[
+    "debug",
+    "small",
+    "full",
+    "time-analysis",
+    "category1",
+    "category2",
+]
+EXP_CHOICES = ["debug", "small", "full", "time-analysis", "category1", "category2"]
 
 
 def experiment_set(name: EXP_NAME) -> list[E1]:
@@ -38,7 +45,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             n_cpu = 1
             mem_per_cpu_gb = 5
             time_seconds = 4 * 60 * 60
-            minimum_trials = 1
             optimizers = ["random_search"]
             suite = TASKS["amlb_classification_full"]
             pipeline = "mlp_classifier"
@@ -59,13 +65,32 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             pipeline = "mlp_classifier"
             metric = "roc_auc_ovr"
             experiment_fixed_seed = 42
+        case "category2":
+            # This suite is running everything that had more
+            # than 50 trials after 4 hours of 10 fold cross-validation
+            n_splits = [10]  # TODO: Add in 5 and 3 fold
+            folds = list(range(10))
+            n_cpu = 4
+            mem_per_cpu_gb = 5
+            time_seconds = 1 * 60 * 60
+            optimizers = ["random_search"]  # TODO: SMAC
+            methods = [
+                "disabled",
+                "current_average_worse_than_best_worst_split",
+                "current_average_worse_than_mean_best",
+                "robust_std_top_3",
+                "robust_std_top_5",
+            ]
+            suite = TASKS["amlb_4hr_10cv_more_than_50_trials"]
+            pipeline = "mlp_classifier"
+            metric = "roc_auc_ovr"
+            experiment_fixed_seed = 42
         case "debug":
             n_splits = [5]
             folds = [0]
-            n_cpu = 1
+            n_cpu = 4
             mem_per_cpu_gb = 5
-            time_seconds = 30
-            minimum_trials = 1
+            time_seconds = 120
             optimizers = ["random_search"]
             suite = TASKS["debug"]
             pipeline = "mlp_classifier"
@@ -74,6 +99,8 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                 "disabled",
                 "current_average_worse_than_mean_best",
                 "current_average_worse_than_best_worst_split",
+                "robust_std_top_3",
+                "robust_std_top_5",
             ]
             experiment_fixed_seed = 42
         case "small":
@@ -82,7 +109,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             n_cpu = 1
             mem_per_cpu_gb = 5
             time_seconds = 10 * 60
-            minimum_trials = 1
             optimizers = ["random_search"]
             suite = TASKS["amlb_classification_less_than_50k"]
             pipeline = "mlp_classifier"
@@ -103,7 +129,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             mem_per_cpu_gb = 5
             time_seconds = 10 * 60
             n_cpu = 1
-            minimum_trials = 1
             metric = "roc_auc_ovr"
             experiment_fixed_seed = 42
         case _:
@@ -124,7 +149,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             memory_gb=mem_per_cpu_gb * n_cpu,
             time_seconds=time_seconds,
             experiment_seed=experiment_fixed_seed,
-            minimum_trials=minimum_trials,
+            minimum_trials=1,
             metric=metric,
             # Extra
             wait=False,
@@ -340,7 +365,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     "partition": "bosch_cpu-cascadelake",
                     "mem": f"{first.memory_gb}G",
                     "time": seconds_to_slurm_time(
-                        int(5 * 60 + first.time_seconds * 1.2),
+                        int(5 * 60 + first.time_seconds * 1.5),
                     ),
                     "cpus-per-task": first.n_cpus,
                     "output": str(log_dir / "%j-%a.out"),

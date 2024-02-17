@@ -9,7 +9,11 @@ from typing import TYPE_CHECKING, ClassVar
 import openml
 import pandas as pd
 import sklearn
+from amltk.optimization import Trial
 from amltk.sklearn.evaluation import CVEvaluation
+from amltk.sklearn.voting import voting_with_preffited_estimators
+from sklearn.ensemble import VotingClassifier, VotingRegressor
+from sklearn.metrics._scorer import _MultimetricScorer
 
 from exps.methods import METHODS
 from exps.metrics import METRICS
@@ -18,7 +22,7 @@ from exps.pipelines import PIPELINES
 from exps.slurm import Arg, Slurmable
 
 if TYPE_CHECKING:
-    from amltk.optimization import Trial
+    from amltk.pipeline import Node
     from amltk.sklearn.evaluation import TaskTypeName
 
 
@@ -150,6 +154,42 @@ class E1(Slurmable):
         return Path(__file__)
 
 
+def test_score_bagged_ensemble(
+    report: Trial.Report,
+    pipeline: Node,  # noqa: ARG001
+    info: CVEvaluation.CompleteEvalInfo,
+) -> Trial.Report:
+    # Only calculate bagged test scores if the CV evaluation was successful
+    if report.status is not Trial.Status.SUCCESS:
+        return report
+
+    assert info.models is not None
+    # Just a proxy heuristic, this will break if we expand the scope of experiments
+    assert len(info.scorers) == 1
+    scorer_name = next(iter(info.scorers))
+    if scorer_name in ("accuracy", "roc_auc_ovr"):
+        voter = VotingClassifier
+        # TODO: Probably only makes sense to do voting:soft if we're using
+        # MLP which tends to be a little better calibrated than something like
+        # a shallow RF
+        kwargs = {"voting": "soft", "n_jobs": 1}
+    elif scorer_name in ("r2", "neg_mean_squared_error", "root_mean_squared_error"):
+        voter = VotingRegressor
+        kwargs = {"n_jobs": 1}
+    else:
+        raise ValueError("Assumption broken")
+
+    bagged_model = voting_with_preffited_estimators(
+        info.models,
+        voter=voter,
+        **kwargs,  # type: ignore
+    )
+    multimetric = _MultimetricScorer(scorers=info.scorers, raise_exc=True)
+    scores = multimetric(bagged_model, info.X_test, info.y_test)
+    report.summary.update({f"test_bagged_{k}": v for k, v in scores.items()})
+    return report
+
+
 def run_it(run: E1) -> None:
     print(run)
     sklearn.set_config(enable_metadata_routing=False, transform_output="pandas")
@@ -168,9 +208,15 @@ def run_it(run: E1) -> None:
         on_error="fail",
         X_test=X_test,
         y_test=y_test,
-        train_score=False,
-        store_models=False,
         task_hint=task_type,
+        # We don't need train scores.
+        train_score=False,
+        # We don't need to store models, they will be handed to post processing
+        # at which point we can discard them to save disk space
+        store_models=False,
+        # Calculate the test score for all fold validation models bagged together
+        post_processing=test_score_bagged_ensemble,
+        post_processing_requires_models=True,
     )
     try:
         if cv_early_stopping_method is not None:
@@ -192,7 +238,7 @@ def run_it(run: E1) -> None:
             plugins=plugins,  # CV early stopping passed in here
             process_memory_limit=None,
             process_walltime_limit=None,
-            threadpool_limit_ctl=False,
+            threadpool_limit_ctl=True,
             max_trials=None,
             on_trial_exception="continue",  # Continue if a trial errors
         )
