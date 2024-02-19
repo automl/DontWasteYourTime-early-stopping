@@ -35,9 +35,9 @@ EXP_NAME: TypeAlias = Literal[
     "full",
     "time-analysis",
     "category1",
-    "category2",
+    "category3",
 ]
-EXP_CHOICES = ["debug", "small", "full", "time-analysis", "category1", "category2"]
+EXP_CHOICES = ["debug", "small", "full", "time-analysis", "category1", "category3"]
 
 
 def cols_needed_for_plotting(metric: Metric, n_splits: int) -> list[str]:
@@ -106,7 +106,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
             pipeline = "mlp_classifier"
             metric = "roc_auc_ovr"
             experiment_fixed_seed = 42
-        case "category2":
+        case "category3":
             # This suite is running everything that had more
             # than 50 trials after 4 hours of 10 fold cross-validation
             n_splits = [10]  # TODO: Add in 5 and 3 fold
