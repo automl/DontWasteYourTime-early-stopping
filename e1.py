@@ -328,6 +328,8 @@ def main():  # noqa: C901, PLR0915, PLR0912
             for exp in array:
                 exp.run()
         case "collect":
+            from amltk.data import reduce_dtypes
+
             array = E1.as_array(experiments)
             if args.fail_early:
                 non_success_exps = [e for e in array if e.status() != "success"]
@@ -335,12 +337,27 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     print(non_success_exps)
 
             _df = pd.concat([exp.history() for exp in array])
+            print(f"Collected {len(array)} histories to for {len(_df)} rows.")
+
             if args.ignore:
                 _df = _df.drop(columns=args.ignore)
+                print(f"Dropped {args.ignore} columns.")
 
+            print("Converting string columns to category")
+            string_cols = _df.dtypes[_df.dtypes == "string"].index
+            _df[string_cols] = _df[string_cols].astype("category")
+
+            print("Converting path columns to string")
             _df = path_col_to_str(_df)
-            _df.convert_dtypes().to_parquet(args.out)
-            print(f"Concatenated {len(array)} histories to {args.out}")
+
+            print("General dtype conversion")
+            _df = _df.convert_dtypes()
+
+            print("Reducing span to containing ints, reducing float precision")
+            _df = reduce_dtypes(_df, reduce_int=True, reduce_float=True)
+
+            print(f"Writing parquet to {args.out}")
+            _df.to_parquet(args.out)
 
         case "submit":
             if args.overwrite_all:
