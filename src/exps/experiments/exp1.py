@@ -142,7 +142,7 @@ class E1(Slurmable):
         return get_fold(
             self.task,
             self.fold,
-            seed=self.experiment_seed,
+            seed=self.experiment_seed + self.fold,
             n_splits=self.n_splits,
         )
 
@@ -234,7 +234,7 @@ def run_it(run: E1) -> None:
             metric=metric,
             n_workers=run.n_cpus,
             optimizer=OPTIMIZERS[run.optimizer],
-            seed=run.experiment_seed,
+            seed=run.experiment_seed + run.fold,
             plugins=plugins,  # CV early stopping passed in here
             process_memory_limit=None,
             process_walltime_limit=None,
