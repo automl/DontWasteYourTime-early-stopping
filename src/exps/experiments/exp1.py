@@ -12,6 +12,7 @@ import sklearn
 from amltk.optimization import Trial
 from amltk.sklearn.evaluation import CVEvaluation
 from amltk.sklearn.voting import voting_with_preffited_estimators
+from amltk.store import PathBucket
 from sklearn.ensemble import VotingClassifier, VotingRegressor
 from sklearn.metrics._scorer import _MultimetricScorer
 
@@ -277,6 +278,7 @@ def run_it(run: E1) -> None:
         try:
             # Remove the data
             evaluator.bucket.rmdir()
+            PathBucket(run.unique_path / "optimizer").rmdir()
         except Exception as e:  # noqa: BLE001
             # We do not want to raise here as it's just cleanup
             print(e)
