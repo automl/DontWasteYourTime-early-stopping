@@ -18,7 +18,7 @@ AMLB_4HR_10CV_MORE_THAN_50_TRIALS = [
     190410,
     190411,
     190412,
-    2073,
+    # 2073,  # Test set didn't have enough classes
     359953,
     359954,
     359955,
@@ -39,7 +39,7 @@ AMLB_4HR_10CV_MORE_THAN_50_TRIALS = [
     359971,
     359972,
     359973,
-    359974,
+    # 359974,  Test set didn't have enough classes.
     359975,
     359979,
 ]
@@ -143,7 +143,7 @@ AMLB_CLASSIFICATION_FULL = [
     359986,  # TODO: Got weird process termination errors, should rerun with SMAC
     359987,  # All folds fails (too few classes for 10 fold cv)
     359988,  # TODO: Rerun, weird killing process error
-    359989,  # TODO Same as above
+    359989,  # Same as above
     359990,  # Failed with SMAC due to timeout on all folds
     359991,  # Failed with SMAC due to timeout on all folds
     359992,
