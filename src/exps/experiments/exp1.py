@@ -249,8 +249,7 @@ def run_it(run: E1) -> None:
         # empty folders.
         @task.on_result
         def _cleanup_after_trial(_: Future, report: Trial.Report) -> None:
-            if not any(report.bucket.keys()):
-                report.bucket.rmdir()
+            report.bucket.rmdir()
 
         scheduler.run(
             timeout=run.time_seconds,
