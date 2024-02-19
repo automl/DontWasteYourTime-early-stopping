@@ -203,7 +203,7 @@ def run_it(run: E1) -> None:
         y,
         splitter="cv",
         n_splits=run.n_splits,
-        random_state=run.experiment_seed,
+        random_state=run.experiment_seed + run.fold,
         working_dir=run.unique_path / "evaluator",
         on_error="fail",
         X_test=X_test,
