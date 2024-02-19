@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from itertools import product
 from pathlib import Path
-from typing import Literal, TypeAlias
+from typing import TYPE_CHECKING, Literal, TypeAlias
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -14,6 +14,9 @@ from exps.methods import METHODS
 from exps.plots import baseline_normalized_over_time, incumbent_traces, rank_plots
 from exps.slurm import seconds_to_slurm_time
 from exps.tasks import TASKS
+
+if TYPE_CHECKING:
+    from amltk.optimization import Metric
 
 
 def path_col_to_str(_df: pd.DataFrame) -> pd.DataFrame:
@@ -30,6 +33,32 @@ EXP_NAME: TypeAlias = Literal[
     "category2",
 ]
 EXP_CHOICES = ["debug", "small", "full", "time-analysis", "category1", "category2"]
+
+
+def cols_needed_for_plotting(metric: Metric, n_splits: int) -> list[str]:
+    CORE = [
+        "created_at",
+        "reported_at",
+        "setting:fold",
+        "setting:metric",
+        "setting:optimizer",
+        "setting:task",
+        "setting:n_splits",
+        "setting:cv_early_stop_strategy",
+    ]
+    METRIC_COLS = [
+        f"metric:{metric}",
+        f"summary:val_mean_{metric.name}",
+        f"summary:val_std_{metric.name}",
+        f"summary:test_mean_{metric.name}",
+        f"summary:test_std_{metric.name}",
+        f"summary:test_bagged_{metric.name}",
+    ]
+    SPLIT_COLS = [
+        f"summary:split_{split}:{kind}_{metric.name}"
+        for kind, split in product(("val", "test"), range(n_splits))
+    ]
+    return CORE + METRIC_COLS + SPLIT_COLS
 
 
 def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
