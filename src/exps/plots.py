@@ -1,6 +1,8 @@
+# ruff: noqa: E501
 from __future__ import annotations
 
-from collections import defaultdict
+from collections.abc import Hashable
+from functools import partial
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -38,7 +40,6 @@ RENAMES: dict[str, str] = {
 
 
 def _inc_trace(
-    name: str,
     df: pd.DataFrame,
     *,
     x_start_col: str,
@@ -51,38 +52,23 @@ def _inc_trace(
     _start = df[x_start_col].min()
     _x = (df[x_col] - _start).dt.total_seconds()
     _y = df[y_col]
-    _s = pd.Series(_y.to_numpy(), index=_x, name=name).sort_index()
+    ind = pd.Index(_x, name="time (s)")
+    _s = pd.Series(_y.to_numpy(), index=ind, name="y").sort_index().dropna()
 
     # Transform everything
     match minimize:
-        # Bounded metrics, 0-1 normalize
         case True:
-            _s = _s.cummin()
+            _s = _s.cummin().drop_duplicates(keep="first")
         case False:
-            _s = _s.cummax()
+            _s = _s.cummax().drop_duplicates(keep="first")
 
     if x_bounds is not None and x_bounds[1] is not None and _s.index[-1] < x_bounds[1]:
         _new_index = np.concatenate([_s.index, [x_bounds[1]]])
         _new_values = np.concatenate([_s.to_numpy(), [_s.iloc[-1]]])
-        _s = pd.Series(_new_values, _new_index, name=name)
+        ind = pd.Index(_new_index, name="time (s)")
+        _s = pd.Series(_new_values, index=ind, name="y")
 
     return _s
-
-
-def min_max_normalize(
-    df: pd.DataFrame,
-    *,
-    mins: list[float],
-    maxs: list[float],
-    invert: bool = False,
-) -> pd.DataFrame:
-    assert len(mins) == len(maxs)
-    assert len(df.columns) == len(mins)
-    normalized = (df - mins) / (np.asarray(maxs) - np.asarray(mins))
-    if invert:
-        return 1 - normalized
-
-    return normalized
 
 
 def rank_plots(  # noqa: PLR0913
@@ -97,7 +83,7 @@ def rank_plots(  # noqa: PLR0913
     minimize: bool = False,
     log_y: bool = False,
     x_bounds: tuple[int | float | None, int | float | None] | None = None,
-    axes: list[plt.Axes] | None = None,
+    ax: list[plt.Axes] | None = None,
     x_label: str | None = None,
     y_label: str | None = None,
     markevery: int | float | None = None,
@@ -193,6 +179,283 @@ def rank_plots(  # noqa: PLR0913
     return axes
 
 
+def baseline_improvement_aggregated(  # noqa: PLR0913
+    df: pd.DataFrame,
+    y: str,
+    x: str,
+    x_start: str,
+    fold: str,
+    hue: str,
+    baseline: str,
+    dataset: str,  # TODO: list
+    *,
+    minimize: bool = False,
+    log_y: bool = False,
+    x_bounds: tuple[int | float | None, int | float | None] | None = None,
+    ax: plt.Axes | None = None,
+    x_label: str | None = None,
+    y_label: str | None = None,
+    markevery: int | float | None = None,
+) -> plt.Axes:
+    # Get the colors to use
+    colors = plt.get_cmap("tab10").colors  # type: ignore
+    markers = MARKERS
+    list(zip(colors, markers, strict=False))
+
+    # TODO: Might have to change here if we also consider other scores such as test
+    # scores
+    baseline_data = df[df[hue] == baseline]
+    baseline_traces = dict(baseline_data.groupby([dataset, fold])[y])
+    print(baseline_traces)
+    mins = per_dataset_bounds["min"]
+    maxs = per_dataset_bounds["max"]
+    assert isinstance(mins, pd.Series)
+    assert isinstance(maxs, pd.Series)
+
+    def _normalized_incumbent_trace(
+        _name: Hashable,
+        _df: pd.DataFrame,
+        _dataset: Hashable,
+        _fold: Hashable,
+    ) -> pd.Series:
+        return _inc_trace(
+            _name,
+            _df,
+            x_start_col=x_start,
+            x_col=x,
+            y_col=y,
+            minimize=minimize,
+            x_bounds=x_bounds,
+            invert=not minimize,
+            normalize=(mins.loc[_normalize_index], maxs.loc[_normalize_index]),
+        )
+
+    # dict from dataset name to methods mean and std for that dataset
+    #
+    # Innermost series looks lik this, represents mean of normalized cost of that
+    # dataset across folds.
+    # METH| mean
+    #  t1 |  .
+    #  t2 |  .
+    #  t3 |  .
+    dfs = {
+        dataset_name: pd.DataFrame(
+            [
+                pd.concat(
+                    [
+                        _normalized_incumbent_trace(
+                            _name=fold_name,
+                            _df=_df,
+                            _dataset=dataset_name,
+                            _fold=fold_name,
+                        )
+                        for fold_name, _df in method_group.groupby(fold, observed=True)
+                    ],
+                    axis=1,
+                    ignore_index=False,
+                )
+                # Ensure index is sorted according to time
+                .sort_index()
+                # Ffill to fill in NaNs, indicating the score for what was found
+                # previously is carried forward
+                .ffill()
+                # Drop rows with NaNs, indicating there wasn't a score for at least 1
+                # fold at that time point
+                .dropna(axis=0)
+                # Take mean across incumbent traces (columns)
+                .mean(axis=1)
+                .rename(method_name)  # type: ignore
+                for method_name, method_group in dataset_group.groupby(
+                    hue,
+                    observed=True,
+                )
+            ],
+        )
+        .T.sort_index()
+        .ffill()
+        .dropna(axis=0)
+        for dataset_name, dataset_group in df.groupby(dataset, observed=True)
+    }
+
+    if ax is None:
+        _, _ax = plt.subplots(1, 1, figsize=(10, 10))
+    else:
+        _ax = ax
+
+    method_names = sorted(set.union(*[set(dfs[dataset]) for dataset in dfs]))
+    dataset_names = list(dfs)
+    for method in method_names:
+        # Just veryify all datasets have the same methods
+        for dname in dataset_names:
+            if method not in dfs[dname].columns:
+                raise ValueError(f"Method {method} not found in dataset {dname}")
+
+        method_df = (
+            pd.concat(  # type: ignore
+                [dfs[dname][method].rename(dataset) for dname in dataset_names],  # type: ignore
+                axis=1,
+                ignore_index=False,
+            )
+            .sort_index()
+            .ffill()
+            .dropna()
+        )
+
+        _means = method_df.mean(axis=1)
+        _stds = method_df.std(axis=1)
+
+        method_name = RENAMES.get(method, method)
+        _means.plot(  # type: ignore
+            drawstyle="steps-post",
+            label=f"{method_name}",
+            markevery=markevery,
+            ax=_ax,
+        )
+        _ax.fill_between(
+            _means.index,  # type: ignore
+            _means - _stds,
+            _means + _stds,
+            alpha=0.3,
+            step="post",
+        )
+
+    if x_bounds:
+        _ax.set_xlim(*x_bounds)
+
+    if log_y:
+        _ax.set_yscale("log")
+
+    _ax.set_xlabel(x_label if x_label is not None else x)
+    _ax.set_ylabel(y_label if y_label is not None else y)
+    _ax.set_title("Aggregated")
+    _ax.legend()
+
+    return _ax
+
+
+def incumbent_traces_aggregated(  # noqa: PLR0913
+    df: pd.DataFrame,
+    y: str,
+    x: str,
+    x_start: str,
+    fold: str,
+    method: str,
+    dataset: str,  # TODO: list
+    *,
+    minimize: bool = False,
+    log_y: bool = False,
+    x_bounds: tuple[int | float | None, int | float | None] | None = None,
+    y_bounds: tuple[int | float | None, int | float | None] | None = None,
+    ax: plt.Axes | None = None,
+    x_label: str | None = None,
+    y_label: str | None = None,
+    invert: bool = False,
+    markevery: int | float | None = None,
+) -> plt.Axes:
+    # Get the colors to use
+    colors = plt.get_cmap("tab10").colors  # type: ignore
+    markers = MARKERS
+    list(zip(colors, markers, strict=False))
+
+    def incumbent_trace(_x: pd.DataFrame) -> pd.Series:
+        return _inc_trace(
+            _x,
+            x_start_col=x_start,
+            x_col=x,
+            y_col=y,
+            minimize=minimize,
+            x_bounds=x_bounds,
+        )
+
+    data = (
+        # Get the incumbent trace for each (dataset, method, fold)
+        # Gives: index=(dataset, method, fold, time) col=(,) values=(inc)
+        df.groupby([dataset, method, fold], observed=True)  # noqa: PD010
+        .apply(incumbent_trace)
+        # Make method and fold columns
+        # Gives: index=(dataset, time), col=(method, fold) values=(inc)
+        .unstack([method, fold])
+        # Groupby together each (dataset,) and apply a ffill to each (method, fold) over (time,)
+        # Gives: index=(dataset, time), col=(method, fold) values=(inc-ffilled)
+        .groupby(dataset, observed=True)
+        .ffill()
+        # Take mean across folds for the method
+        # Gives: index=(dataset, time), col=(method,) values=(mean_inc_across_folds)
+        .groupby(level=method, axis=1, observed=True)
+        .mean()
+        # Min/max each mean-inc-trace by the min/max of all observed values for the dataset
+        # Gives: index=(dataset, time), col=(method,) values=(normalized-mean-inc-across-folds)
+        .groupby(dataset, observed=True, group_keys=False)
+        .apply(lambda x: (x - x.min().min()) / (x.max().max() - x.min().min()))
+        # Pop off the dataset index, and ffill so we can then mean across it
+        # Gives: index=(time), col=(method,dataset) values=(normalized-mean-inc-across-folds)
+        .unstack(dataset)
+        .ffill()
+    )
+
+    # Our data now looks like this
+    """
+    setting:cv_early_stop_strategy                                  current_average_worse_than_best_worst_split                                                                                                                                           ... robust_std_top_5
+    setting:task                                                        146818    146820    168350    168757    168784   168910    168911    189922 190137 190146    190392    190410 190411    190412    359953 359954  ...           359959 359960    359961    359962 359963 359964    359965 359967    359968    359969    359970    359971    359972 359973 359975    359979
+    time (s)                                                                                                                                                                                                             ...
+    1.011305                                                               NaN       NaN       NaN       NaN       NaN      NaN       NaN       NaN    NaN    NaN       NaN       NaN    NaN       NaN       NaN    NaN  ...              NaN    NaN       NaN       NaN    NaN    NaN       NaN    NaN       NaN       NaN       NaN       NaN       NaN    NaN    NaN       NaN
+    1.016992                                                               NaN       NaN       NaN       NaN       NaN      NaN       NaN       NaN    NaN    NaN       NaN       NaN    NaN       NaN       NaN    NaN  ...              NaN    NaN       NaN       NaN    NaN    NaN       NaN    NaN       NaN       NaN       NaN       NaN       NaN    NaN    NaN       NaN
+    1.017846                                                               NaN       NaN       NaN       NaN       NaN      NaN       NaN       NaN    NaN    NaN       NaN       NaN    NaN       NaN       NaN    NaN  ...              NaN    NaN       NaN       NaN    NaN    NaN       NaN    NaN       NaN       NaN       NaN       NaN       NaN    NaN    NaN       NaN
+    1.022772                                                               NaN       NaN       NaN       NaN       NaN      NaN       NaN       NaN    NaN    NaN       NaN       NaN    NaN       NaN       NaN    NaN  ...              NaN    NaN       NaN       NaN    NaN    NaN       NaN    NaN       NaN       NaN       NaN       NaN       NaN    NaN    NaN       NaN
+    1.024474                                                               NaN       NaN       NaN       NaN       NaN      NaN       NaN       NaN    NaN    NaN       NaN       NaN    NaN       NaN       NaN    NaN  ...              NaN    NaN       NaN       NaN    NaN    NaN       NaN    NaN       NaN       NaN       NaN       NaN       NaN    NaN    NaN       NaN
+    ...                                                                    ...       ...       ...       ...       ...      ...       ...       ...    ...    ...       ...       ...    ...       ...       ...    ...  ...              ...    ...       ...       ...    ...    ...       ...    ...       ...       ...       ...       ...       ...    ...    ...       ...
+    3587.761974                                                       0.966475  0.999956  0.991856  0.966388  0.985812  0.97294  0.952077  0.968142    1.0    1.0  0.753457  0.998171    1.0  0.956321  0.989934    1.0  ...         0.983291    1.0  0.992377  0.885627    1.0    1.0  0.966052    1.0  0.995941  0.986114  0.981243  0.995812  0.985233    1.0    1.0  0.861138
+    3587.914040                                                       0.966475  0.999956  0.991856  0.966388  0.985812  0.97294  0.952077  0.968142    1.0    1.0  0.753457  0.998171    1.0  0.956321  0.989934    1.0  ...         0.983291    1.0  0.992377  0.885627    1.0    1.0  0.966052    1.0  0.995941  0.986114  0.981243  0.995812  0.985233    1.0    1.0  0.861138
+    3587.954826                                                       0.966475  0.999956  0.991856  0.966388  0.985812  0.97294  0.952077  0.968142    1.0    1.0  0.753457  0.998171    1.0  0.956321  0.989934    1.0  ...         0.983291    1.0  0.992377  0.885627    1.0    1.0  0.966052    1.0  0.995941  0.986114  0.981243  0.995812  0.985233    1.0    1.0  0.861138
+    3589.325142                                                       0.966475  0.999956  0.991856  0.971617  0.985812  0.97294  0.952077  0.968142    1.0    1.0  0.753457  0.998171    1.0  0.956321  0.989934    1.0  ...         0.983291    1.0  0.992377  0.885627    1.0    1.0  0.966052    1.0  0.995941  0.986114  0.981243  0.995812  0.985233    1.0    1.0  0.861138
+    3600.000000                                                       0.966475  0.999956  0.991856  0.971617  0.985812  0.97294  0.952077  0.968142    1.0    1.0  0.753457  0.998171    1.0  0.956321  0.989934    1.0  ...         0.983291    1.0  0.992377  0.885627    1.0    1.0  0.966052    1.0  0.995941  0.986114  0.981243  0.995812  0.985233    1.0    1.0  0.861138
+    """
+
+    if ax is None:
+        _, _ax = plt.subplots(1, 1, figsize=(10, 10))
+    else:
+        _ax = ax
+
+    for method_name, method_group in data.T.groupby(level=method, observed=True):
+        method_group = method_group.T  # noqa: PLW2901
+        _means = method_group.mean(axis=1)
+        _stds = method_group.sem(axis=1)
+
+        if invert:
+            _means = 1 - _means
+
+        label_name = RENAMES.get(method_name, method_name)
+        _means.plot(  # type: ignore
+            drawstyle="steps-post",
+            label=f"{label_name}",
+            markevery=markevery,
+            ax=_ax,
+        )
+        _ax.fill_between(
+            _means.index,  # type: ignore
+            _means - _stds,
+            _means + _stds,
+            alpha=0.2,
+            step="post",
+        )
+
+    if x_bounds:
+        _ax.set_xlim(*x_bounds)
+
+    if y_bounds:
+        _ax.set_ylim(*y_bounds)
+
+    if log_y:
+        _ax.set_yscale("log")
+
+    _ax.set_xlabel(x_label if x_label is not None else x)
+    _ax.set_ylabel(y_label if y_label is not None else y)
+    _ax.set_title("Aggregated")
+    _ax.legend()
+
+    return _ax
+
+
 def incumbent_traces(  # noqa: PLR0913
     df: pd.DataFrame,
     y: str,
@@ -211,7 +474,7 @@ def incumbent_traces(  # noqa: PLR0913
     markevery: int | float | None = None,
     ncols: int = 3,
 ) -> list[plt.Axes]:
-    perplot = list(df.groupby(subplot))
+    perplot = list(df.groupby(subplot, observed=True))
 
     # Get the colors to use
     colors = plt.get_cmap("tab10").colors  # type: ignore
@@ -225,52 +488,58 @@ def incumbent_traces(  # noqa: PLR0913
     else:
         assert len(axes) >= len(perplot)
 
+    _incumbent_trace = partial(
+        _inc_trace,
+        x_start_col=x_start,
+        x_col=x,
+        y_col=y,
+        minimize=minimize,
+        x_bounds=x_bounds,
+    )
+
     for (plot_name, plot_group), ax in zip(perplot, axes, strict=False):
+        print(plot_name)
         # We now have group as a dataframe for a given plot, i.e. the task
 
-        # Collect a dataframe of incumbent traces for each hue group
         # Key is the hue name, value is the below dataframe
         #
         #    | 0 | 1 | 2 | 3 | ...  <- fold index
         # t1 | . | . | . | . | ...  <- time 1
         # t2 | . | . | . | . | ...  <- time 2
         # t3 | . | . | . | . | ...  <- time 3
-        hue_dfs: dict[str, pd.DataFrame] = {}
-        for hue_name, hue_group in plot_group.groupby(hue):
-            hue_inc_traces = []
-            for _std_name, _std_group in hue_group.groupby(std):
-                inc_trace = _inc_trace(
-                    _std_name,
-                    _std_group,
-                    x_start_col=x_start,
-                    x_col=x,
-                    y_col=y,
-                    minimize=minimize,
-                    x_bounds=x_bounds,
-                )
-                hue_inc_traces.append(inc_trace)
-
-            hue_df = (
-                pd.concat(hue_inc_traces, axis=1, ignore_index=False)
-                .sort_index()
-                .ffill()
-                .dropna()  # TODO: drop?
+        hue_dfs: dict[Hashable, pd.DataFrame] = {
+            hue_name: pd.concat(
+                [
+                    _incumbent_trace(_std_name, _std_group)
+                    for _std_name, _std_group in hue_group.groupby(std, observed=True)
+                ],
+                axis=1,
+                ignore_index=False,
             )
-            assert isinstance(hue_name, str)
-            hue_dfs[hue_name] = hue_df
+            .sort_index()
+            .ffill()
+            .dropna()
+            for hue_name, hue_group in plot_group.groupby(hue, observed=True)
+        }
 
-        # For each dataframe, we want to normalize each fold column by the min/max ever seen
-        # for an incumbent trace on that fold.
+        # For each dataframe, we want to normalize each fold column by the min/max ever
+        # seen for an incumbent trace on that fold.
         n_folds = len(next(iter(hue_dfs.values())).columns)
-        mins = [
+        fold_mins = [
             min(float(df[f].min()) for df in hue_dfs.values()) for f in range(n_folds)
         ]
-        maxs = [
+        fold_maxs = [
             max(float(df[f].max()) for df in hue_dfs.values()) for f in range(n_folds)
         ]
 
+        inverted = not minimize  # Make it so that lower is better
         normalized_hue_dfs = {
-            hue_name: min_max_normalize(df, mins=mins, maxs=maxs, invert=not minimize)
+            hue_name: min_max_normalize(
+                df,
+                mins=fold_mins,
+                maxs=fold_maxs,
+                invert=inverted,
+            )
             for hue_name, df in hue_dfs.items()
         }
 
@@ -305,139 +574,7 @@ def incumbent_traces(  # noqa: PLR0913
             ax.set_xlim(*x_bounds)
 
         if log_y:
-            ax.set_yscale("log")
-
-        ax.set_xlabel(x_label if x_label is not None else x)
-        ax.set_ylabel(y_label if y_label is not None else y)
-        ax.set_title(str(plot_name))
-        ax.legend()
-
-    return axes
-
-
-def baseline_normalized_over_time(  # noqa: PLR0913
-    df: pd.DataFrame,
-    y: str,
-    x: str,
-    x_start: str,
-    std: str,
-    hue: str,
-    baseline: str,
-    metric_bounds: tuple[float, float],
-    subplot: str,  # TODO: list
-    *,
-    minimize: bool = False,
-    log_y: bool = False,
-    x_bounds: tuple[int | float | None, int | float | None] | None = None,
-    y_bounds: tuple[int | float | None, int | float | None] | None = None,
-    axes: list[plt.Axes] | None = None,
-    x_label: str | None = None,
-    y_label: str | None = None,
-    markevery: int | float | None = None,
-    ncols: int = 3,
-) -> list[plt.Axes]:
-    metric_worst = metric_bounds[0] if minimize else metric_bounds[1]
-    perplot = list(df.groupby(subplot))
-
-    # Get the colors to use
-    colors = plt.get_cmap("tab10").colors  # type: ignore
-    markers = MARKERS
-    list(zip(colors, markers, strict=False))
-
-    if axes is None:
-        nrows = (len(perplot) + ncols - 1) // ncols
-        _, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 5 * nrows))
-        axes = list(axes.flatten())  # type: ignore
-    else:
-        assert len(axes) >= len(perplot)
-
-    for (plot_name, plot_group), ax in zip(perplot, axes, strict=False):
-        # We now have group as a dataframe for a given plot, i.e. the task
-        # We now group everything by the task fold
-
-        # Contains a mapping from the hue group (e.g. method) to a list
-        # of fold results
-        fold_results: dict[str, list[pd.Series]] = defaultdict(list)
-
-        for _, std_group in plot_group.groupby(std):
-            # We select out the baseline results for this fold, we will use this to
-            # center the scores of the fold
-            hue_groups = dict(iter(std_group.groupby(hue)))
-            baseline_trace = hue_groups[baseline]
-            baseline_inc_trace = _inc_normalized(
-                baseline_trace,
-                x_start_col=x_start,
-                x_col=x,
-                y_col=y,
-                minimize=minimize,
-                x_bounds=x_bounds,
-            )
-
-            for hue_name, hue_group in hue_groups.items():
-                assert isinstance(hue_name, str)
-                hue_inc_trace = _inc_normalized(
-                    hue_group,
-                    x_start_col=x_start,
-                    x_col=x,
-                    y_col=y,
-                    minimize=minimize,
-                    x_bounds=x_bounds,
-                )
-
-                # Create a joint index that covers both the baseline and the hue
-                merged_index = baseline_inc_trace.index.union(
-                    hue_inc_trace.index,
-                    sort=True,
-                )
-                # Reindex the baseline and hue to the merged index, ffilling where
-                # possible and just filling with worst score otherwise.
-                # TODO: Maybe consider just dropping?
-                reindexed_baseline = baseline_inc_trace.reindex(
-                    merged_index,
-                    method="ffill",
-                ).fillna(metric_worst)
-                reindexed_hue = hue_inc_trace.reindex(
-                    merged_index,
-                    method="ffill",
-                ).fillna(metric_worst)
-
-                assert len(reindexed_baseline) == len(reindexed_hue)
-                fold_results[hue_name].append(reindexed_hue - reindexed_baseline)
-
-        for hue_name, traces in fold_results.items():
-            _hue_df = (
-                pd.concat(traces, axis=1, ignore_index=False)
-                .sort_index()
-                .ffill()
-                .dropna()
-            )
-            _means = _hue_df.mean(axis=1)
-            _stds = _hue_df.std(axis=1)
-
-            assert isinstance(hue_name, str)
-            legend_name = RENAMES.get(hue_name, hue_name)
-
-            _means.plot(  # type: ignore
-                ax=ax,
-                drawstyle="steps-post",
-                label=legend_name,
-                markevery=markevery,
-            )
-            ax.fill_between(
-                _means.index,  # type: ignore
-                _means - _stds,
-                _means + _stds,
-                alpha=0.3,
-                step="post",
-            )
-
-        if x_bounds:
-            ax.set_xlim(*x_bounds)
-        if y_bounds:
-            ax.set_ylim(*y_bounds)
-
-        if log_y:
-            ax.set_yscale("log")
+            ax.set_yscale("symlog")
 
         ax.set_xlabel(x_label if x_label is not None else x)
         ax.set_ylabel(y_label if y_label is not None else y)

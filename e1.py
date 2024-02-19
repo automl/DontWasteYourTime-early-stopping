@@ -11,7 +11,12 @@ from rich import print
 
 from exps.experiments.exp1 import E1
 from exps.methods import METHODS
-from exps.plots import baseline_normalized_over_time, incumbent_traces, rank_plots
+from exps.metrics import METRICS
+from exps.plots import (
+    incumbent_traces,
+    incumbent_traces_aggregated,
+    rank_plots,
+)
 from exps.slurm import seconds_to_slurm_time
 from exps.tasks import TASKS
 
@@ -229,10 +234,18 @@ def main():  # noqa: C901, PLR0915, PLR0912
 
     with cmds("plot") as p:
         p.add_argument("--out", type=Path, required=True)
+        p.add_argument("--metric", type=str, choices=METRICS.keys(), required=True)
+        p.add_argument("--n-splits", type=int, required=True)
+        p.add_argument("--time-limit", type=int, required=True)
         p.add_argument(
             "--kind",
             type=str,
-            choices=["incumbent", "baseline-normalized", "ranks"],
+            choices=[
+                "incumbent",
+                "baseline-normalized",
+                "ranks",
+                "incumbent-aggregated",
+            ],
         )
         p.add_argument(
             "input",
@@ -250,28 +263,50 @@ def main():  # noqa: C901, PLR0915, PLR0912
 
     args = parser.parse_args()
     if args.command == "plot":
-        _df = pd.read_parquet(args.input)
+        metric = METRICS[args.metric]
+        n_splits = args.n_splits
+        time_limit = args.time_limit
+        cols = cols_needed_for_plotting(metric, n_splits)
+        _df = pd.read_parquet(args.input, columns=cols)
         match args.kind:
             case "incumbent":
                 incumbent_traces(
                     _df,
-                    y="metric:roc_auc_ovr [0.0, 1.0] (maximize)",
+                    y=f"metric:{metric}",
                     hue="setting:cv_early_stop_strategy",
                     std="setting:fold",
                     subplot="setting:task",
                     x="reported_at",
                     x_start="created_at",
                     x_label="Time (s)",
-                    y_label="ROC AUC (OVR)",
-                    x_bounds=(0, 10 * 60),
-                    minimize=False,
+                    y_label="1 - ROC AUC (OVR) (normalized)",
+                    x_bounds=(0, time_limit),
+                    minimize=metric.minimize,
                     log_y=False,
+                    markevery=0.1,
+                )
+            case "incumbent-aggregated":
+                incumbent_traces_aggregated(
+                    _df,
+                    y=f"metric:{metric}",
+                    method="setting:cv_early_stop_strategy",
+                    fold="setting:fold",
+                    dataset="setting:task",
+                    x="reported_at",
+                    x_start="created_at",
+                    x_label="Time (s)",
+                    y_label="1 - (normalized) ROC AUC [OVR]",
+                    x_bounds=(0, time_limit),
+                    y_bounds=(1e-2, 1),
+                    minimize=metric.minimize,
+                    invert=True,
+                    log_y=True,
                     markevery=0.1,
                 )
             case "ranks":
                 rank_plots(
                     _df,
-                    y="metric:roc_auc_ovr [0.0, 1.0] (maximize)",
+                    y=f"metric:{metric}",
                     hue="setting:cv_early_stop_strategy",
                     std="setting:fold",
                     subplot="setting:task",
@@ -280,14 +315,14 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     x_label="Time (s)",
                     y_label="Mean Rank",
                     x_bounds=(0, 10 * 60),
-                    minimize=False,
-                    log_y=False,
+                    minimize=metric.minimize,
+                    log_y=True,
                     markevery=0.1,
                 )
             case "baseline-normalized":
                 baseline_normalized_over_time(
                     _df,
-                    y="metric:roc_auc_ovr [0.0, 1.0] (maximize)",
+                    y=f"metric:{metric}",
                     baseline="disabled",
                     hue="setting:cv_early_stop_strategy",
                     std="setting:fold",
@@ -299,7 +334,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     x_bounds=(0, 10 * 60),
                     minimize=False,
                     metric_bounds=(0, 1),
-                    log_y=False,
+                    log_y=True,
                     markevery=0.1,
                 )
             case _:
