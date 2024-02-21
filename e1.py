@@ -45,7 +45,10 @@ EXP_CHOICES = [
 ]
 
 
-def cols_needed_for_plotting(metric: Metric, n_splits: int) -> list[str]:
+def cols_needed_for_plotting(metric: Metric | str, n_splits: int) -> list[str]:
+    if isinstance(metric, str):
+        metric = METRICS[metric]
+
     CORE = [
         "created_at",
         "reported_at",
