@@ -71,6 +71,22 @@ def cols_needed_for_plotting(metric: Metric, n_splits: int) -> list[str]:
     return CORE + METRIC_COLS + SPLIT_COLS
 
 
+def exp_name_to_result_dir(exp_name: EXP_NAME) -> Path:
+    # Unfortunatly I bundled some experiments into the same directory, this just maps
+    # them to where the results for a specific experiment are actually stored.
+    match exp_name:
+        case "time-analysis":
+            return Path("results-time-analysis").resolve()
+        case "category3-nsplits-10" | "category3-nsplits-5" | "category3-nsplits-3":
+            return Path("results-category3").resolve()
+        case "category4-nsplits-10" | "category4-nsplits-5" | "category4-nsplits-3":
+            return Path("results-category3").resolve()
+        case "debug":
+            return Path("results-debug").resolve()
+        case _:
+            raise ValueError(f"Unknown experiment set: {exp_name}")
+
+
 def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
     match name:
         case "time-analysis":
@@ -90,7 +106,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
             metric = "roc_auc_ovr"
             methods = ["disabled"]
             experiment_fixed_seed = 42
-            result_dir = Path("results-time-analysis").resolve()
         case "category3-nsplits-10":
             # This suite is running everything that had more
             # than 50 trials after 4 hours of 10 fold cross-validation
@@ -111,7 +126,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
             pipeline = "mlp_classifier"
             metric = "roc_auc_ovr"
             experiment_fixed_seed = 42
-            result_dir = Path("results-category3").resolve()
         case "category3-nsplits-5":
             # This suite is running everything that had more
             # than 50 trials after 4 hours of 10 fold cross-validation
@@ -132,7 +146,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
             pipeline = "mlp_classifier"
             metric = "roc_auc_ovr"
             experiment_fixed_seed = 42
-            result_dir = Path("results-category3").resolve()
         case "category3-nsplits-3":
             # This suite is running everything that had more
             # than 50 trials after 4 hours of 10 fold cross-validation
@@ -153,7 +166,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
             pipeline = "mlp_classifier"
             metric = "roc_auc_ovr"
             experiment_fixed_seed = 42
-            result_dir = Path("results-category3").resolve()
         case "category4-nsplits-10":
             # This suite is running everything that had more
             # than 50 trials after 4 hours of 10 fold cross-validation
@@ -174,7 +186,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
             pipeline = "rf_classifier"
             metric = "roc_auc_ovr"
             experiment_fixed_seed = 42
-            result_dir = Path("results-category4").resolve()
         case "debug":
             n_splits = [3]
             folds = [0]
@@ -187,10 +198,10 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
             metric = "roc_auc_ovr"
             methods = ["disabled"]
             experiment_fixed_seed = 42
-            result_dir = Path("results-debug").resolve()
         case _:
             raise ValueError(f"Unknown experiment set: {name}")
 
+    result_dir = exp_name_to_result_dir(name)
     return [
         E1(
             # Parameters defining experiments
@@ -331,7 +342,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
         return
 
     experiments = experiment_set(args.expname)
-    result_dir = Path(f"results-{args.expname}").resolve()
+    result_dir = exp_name_to_result_dir(args.expname)
     log_dir = result_dir / "slurm-logs"
     script_dir = result_dir / "slurm-scripts"
 
@@ -351,8 +362,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
             )
             print(status)
             if args.out:
-                status = path_col_to_str(status)
-                status.convert_dtypes().to_parquet(args.out)
+                shrink_dataframe(status).to_parquet(args.out)
         case "run":
             if args.overwrite_all:
                 exps = experiments
