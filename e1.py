@@ -37,8 +37,17 @@ EXP_NAME: TypeAlias = Literal[
     "time-analysis",
     "category1",
     "category3",
+    "category4",
 ]
-EXP_CHOICES = ["debug", "small", "full", "time-analysis", "category1", "category3"]
+EXP_CHOICES = [
+    "debug",
+    "small",
+    "full",
+    "time-analysis",
+    "category1",
+    "category3",
+    "category4",
+]
 
 
 def cols_needed_for_plotting(metric: Metric, n_splits: int) -> list[str]:
@@ -127,23 +136,37 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
             pipeline = "mlp_classifier"
             metric = "roc_auc_ovr"
             experiment_fixed_seed = 42
-        case "debug":
-            n_splits = [5]
-            folds = [0]
+        case "category4":
+            # This suite is running everything that had more
+            # than 50 trials after 4 hours of 10 fold cross-validation
+            n_splits = [10]  # TODO: Add in 5 and 3 fold
+            folds = list(range(10))
             n_cpu = 4
             mem_per_cpu_gb = 5
-            time_seconds = 120
-            optimizers = ["random_search"]
-            suite = TASKS["debug"]
-            pipeline = "mlp_classifier"
-            metric = "roc_auc_ovr"
+            time_seconds = 1 * 60 * 60
+            optimizers = ["random_search"]  # TODO: SMAC
             methods = [
                 "disabled",
-                "current_average_worse_than_mean_best",
                 "current_average_worse_than_best_worst_split",
+                "current_average_worse_than_mean_best",
                 "robust_std_top_3",
                 "robust_std_top_5",
             ]
+            suite = TASKS["amlb_4hr_10cv_more_than_50_trials"]
+            pipeline = "rf_classifier"
+            metric = "roc_auc_ovr"
+            experiment_fixed_seed = 42
+        case "debug":
+            n_splits = [3]
+            folds = [0]
+            n_cpu = 4
+            mem_per_cpu_gb = 5
+            time_seconds = 30
+            optimizers = ["random_search"]
+            suite = TASKS["debug"]
+            pipeline = "rf_classifier"
+            metric = "roc_auc_ovr"
+            methods = ["disabled"]
             experiment_fixed_seed = 42
         case "small":
             n_splits = [5]
