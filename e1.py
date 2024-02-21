@@ -10,43 +10,38 @@ import pandas as pd
 from rich import print
 
 from exps.experiments.exp1 import E1
-from exps.methods import METHODS
 from exps.metrics import METRICS
 from exps.plots import (
-    incumbent_traces,
     incumbent_traces_aggregated,
-    rank_plots,
     ranking_plots_aggregated,
 )
 from exps.slurm import seconds_to_slurm_time
 from exps.tasks import TASKS
+from exps.util import shrink_dataframe
 
 if TYPE_CHECKING:
     from amltk.optimization import Metric
 
 
-def path_col_to_str(_df: pd.DataFrame) -> pd.DataFrame:
-    path_dtypes = _df.select_dtypes(Path).columns
-    return _df.astype({k: pd.StringDtype() for k in path_dtypes})
-
-
 EXP_NAME: TypeAlias = Literal[
     "debug",
-    "small",
-    "full",
     "time-analysis",
-    "category1",
-    "category3",
-    "category4",
+    "category3-nsplits-10",
+    "category3-nsplits-5",
+    "category3-nsplits-3",
+    "category4-nsplits-10",
+    "category4-nsplits-5",
+    "category4-nsplits-3",
 ]
 EXP_CHOICES = [
     "debug",
-    "small",
-    "full",
     "time-analysis",
-    "category1",
-    "category3",
-    "category4",
+    "category3-nsplits-10",  # MLP pipeline
+    "category3-nsplits-5",  # MLP pipeline
+    "category3-nsplits-3",  # MLP pipeline
+    "category4-nsplits-10",  # RF pipeline
+    "category4-nsplits-5",  # RF pipeline
+    "category4-nsplits-3",  # RF pipeline
 ]
 
 
@@ -95,31 +90,11 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
             metric = "roc_auc_ovr"
             methods = ["disabled"]
             experiment_fixed_seed = 42
-        case "category1":
+            result_dir = Path("results-time-analysis").resolve()
+        case "category3-nsplits-10":
             # This suite is running everything that had more
             # than 50 trials after 4 hours of 10 fold cross-validation
-            n_splits = [5, 10]  # TODO: Likely need another one here
-            folds = list(range(10))
-            n_cpu = 1
-            mem_per_cpu_gb = 5
-            time_seconds = 4 * 60 * 60
-            optimizers = [
-                "random_search",
-            ]  # TODO: SMAC
-            methods = [
-                "disabled",
-                "current_average_worse_than_mean_best",
-                "current_average_worse_than_best_worst_split",
-                "mean_outside_1_std_of_top_3",
-            ]
-            suite = TASKS["amlb_4hr_10cv_more_than_50_trials"]
-            pipeline = "mlp_classifier"
-            metric = "roc_auc_ovr"
-            experiment_fixed_seed = 42
-        case "category3":
-            # This suite is running everything that had more
-            # than 50 trials after 4 hours of 10 fold cross-validation
-            n_splits = [3, 5, 10]
+            n_splits = [10]
             folds = list(range(10))
             n_cpu = 4
             mem_per_cpu_gb = 5
@@ -136,7 +111,50 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
             pipeline = "mlp_classifier"
             metric = "roc_auc_ovr"
             experiment_fixed_seed = 42
-        case "category4":
+            result_dir = Path("results-category3").resolve()
+        case "category3-nsplits-5":
+            # This suite is running everything that had more
+            # than 50 trials after 4 hours of 10 fold cross-validation
+            n_splits = [5]
+            folds = list(range(10))
+            n_cpu = 4
+            mem_per_cpu_gb = 5
+            time_seconds = 1 * 60 * 60
+            optimizers = ["random_search"]  # TODO: SMAC
+            methods = [
+                "disabled",
+                "current_average_worse_than_best_worst_split",
+                "current_average_worse_than_mean_best",
+                "robust_std_top_3",
+                "robust_std_top_5",
+            ]
+            suite = TASKS["amlb_4hr_10cv_more_than_50_trials"]
+            pipeline = "mlp_classifier"
+            metric = "roc_auc_ovr"
+            experiment_fixed_seed = 42
+            result_dir = Path("results-category3").resolve()
+        case "category3-nsplits-3":
+            # This suite is running everything that had more
+            # than 50 trials after 4 hours of 10 fold cross-validation
+            n_splits = [3]
+            folds = list(range(10))
+            n_cpu = 4
+            mem_per_cpu_gb = 5
+            time_seconds = 1 * 60 * 60
+            optimizers = ["random_search"]  # TODO: SMAC
+            methods = [
+                "disabled",
+                "current_average_worse_than_best_worst_split",
+                "current_average_worse_than_mean_best",
+                "robust_std_top_3",
+                "robust_std_top_5",
+            ]
+            suite = TASKS["amlb_4hr_10cv_more_than_50_trials"]
+            pipeline = "mlp_classifier"
+            metric = "roc_auc_ovr"
+            experiment_fixed_seed = 42
+            result_dir = Path("results-category3").resolve()
+        case "category4-nsplits-10":
             # This suite is running everything that had more
             # than 50 trials after 4 hours of 10 fold cross-validation
             n_splits = [10]  # TODO: Add in 5 and 3 fold
@@ -156,6 +174,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
             pipeline = "rf_classifier"
             metric = "roc_auc_ovr"
             experiment_fixed_seed = 42
+            result_dir = Path("results-category4").resolve()
         case "debug":
             n_splits = [3]
             folds = [0]
@@ -168,38 +187,9 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
             metric = "roc_auc_ovr"
             methods = ["disabled"]
             experiment_fixed_seed = 42
-        case "small":
-            n_splits = [5]
-            folds = list(range(10))
-            n_cpu = 1
-            mem_per_cpu_gb = 5
-            time_seconds = 10 * 60
-            optimizers = ["random_search"]
-            suite = TASKS["amlb_classification_less_than_50k"]
-            pipeline = "mlp_classifier"
-            metric = "roc_auc_ovr"
-            methods = [
-                "disabled",
-                "current_average_worse_than_mean_best",
-                "current_average_worse_than_best_worst_split",
-            ]
-            experiment_fixed_seed = 42
-        case "full":
-            pipeline = "mlp_classifier"
-            folds = list(range(10))
-            n_splits = [10]  # Set to 10, see if we can even evaluate a full model
-            suite = TASKS["amlb_classification_full"]
-            optimizers = ["random_search", "smac"]
-            methods = list(METHODS.keys())
-            mem_per_cpu_gb = 5
-            time_seconds = 10 * 60
-            n_cpu = 1
-            metric = "roc_auc_ovr"
-            experiment_fixed_seed = 42
+            result_dir = Path("results-debug").resolve()
         case _:
             raise ValueError(f"Unknown experiment set: {name}")
-
-    result_dir = Path(f"results-{name}").resolve()
 
     return [
         E1(
@@ -293,24 +283,11 @@ def main():  # noqa: C901, PLR0915, PLR0912
         time_limit = args.time_limit
         cols = cols_needed_for_plotting(metric, n_splits)
         _df = pd.read_parquet(args.input, columns=cols)
+        _df = _df[_df["setting:n_splits"] == n_splits]
+        N_DATASETS = _df["setting:task"].nunique()
         match args.kind:
-            case "incumbent":
-                incumbent_traces(
-                    _df,
-                    y=f"metric:{metric}",
-                    hue="setting:cv_early_stop_strategy",
-                    std="setting:fold",
-                    subplot="setting:task",
-                    x="reported_at",
-                    x_start="created_at",
-                    x_label="Time (s)",
-                    y_label="1 - ROC AUC (OVR) (normalized)",
-                    x_bounds=(0, time_limit),
-                    minimize=metric.minimize,
-                    log_y=False,
-                    markevery=0.1,
-                )
             case "incumbent-aggregated":
+                title = f"Normalized Cost Over {N_DATASETS} Datasets"
                 incumbent_traces_aggregated(
                     _df,
                     y=f"metric:{metric}",
@@ -322,6 +299,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     x_start="created_at",
                     x_label="Time (s)",
                     y_label="1 - (normalized) ROC AUC [OVR]",
+                    title=title,
                     x_bounds=(0, time_limit),
                     # y_bounds=(1e-1, 1),
                     minimize=metric.minimize,
@@ -330,6 +308,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     markevery=0.1,
                 )
             case "ranks-aggregated":
+                title = f"Rank Aggregation Over {N_DATASETS} Datasets"
                 ranking_plots_aggregated(
                     _df,
                     y=f"metric:{metric}",
@@ -341,42 +320,9 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     x_start="created_at",
                     x_label="Time (s)",
                     y_label="Rank",
+                    title=title,
                     x_bounds=(0, time_limit),
                     minimize=metric.minimize,
-                    markevery=0.1,
-                )
-            case "ranks":
-                rank_plots(
-                    _df,
-                    y=f"metric:{metric}",
-                    hue="setting:cv_early_stop_strategy",
-                    std="setting:fold",
-                    subplot="setting:task",
-                    x="reported_at",
-                    x_start="created_at",
-                    x_label="Time (s)",
-                    y_label="Mean Rank",
-                    x_bounds=(0, 10 * 60),
-                    minimize=metric.minimize,
-                    log_y=True,
-                    markevery=0.1,
-                )
-            case "baseline-normalized":
-                baseline_normalized_over_time(
-                    _df,
-                    y=f"metric:{metric}",
-                    baseline="disabled",
-                    hue="setting:cv_early_stop_strategy",
-                    std="setting:fold",
-                    subplot="setting:task",
-                    x="reported_at",
-                    x_start="created_at",
-                    x_label="Time (s)",
-                    y_label="ROC AUC (shifted)",
-                    x_bounds=(0, 10 * 60),
-                    minimize=False,
-                    metric_bounds=(0, 1),
-                    log_y=True,
                     markevery=0.1,
                 )
             case _:
@@ -434,34 +380,28 @@ def main():  # noqa: C901, PLR0915, PLR0912
             for exp in array:
                 exp.run()
         case "collect":
-            from amltk.data import reduce_dtypes
-
             array = E1.as_array(experiments)
             if args.fail_early:
                 non_success_exps = [e for e in array if e.status() != "success"]
                 if any(non_success_exps):
                     print(non_success_exps)
 
-            _df = pd.concat([exp.history() for exp in array])
-            print(f"Collected {len(array)} histories to for {len(_df)} rows.")
+            first = experiments[0]
+            columns_to_load = cols_needed_for_plotting(
+                metric=METRICS[first.metric],
+                n_splits=first.n_splits,
+            )
 
-            if args.ignore:
-                _df = _df.drop(columns=args.ignore)
-                print(f"Dropped {args.ignore} columns.")
+            print(f"Collecting {len(array)} histories.")
+            _df = pd.concat([exp.history(columns=columns_to_load) for exp in array])
 
-            print("Converting string columns to category")
-            string_cols = _df.dtypes[_df.dtypes == "string"].index
-            _df[string_cols] = _df[string_cols].astype("category")
-
-            print("Converting path columns to string")
-            _df = path_col_to_str(_df)
-
-            print("General dtype conversion")
-            _df = _df.convert_dtypes()
-
-            print("Reducing span to containing ints, reducing float precision")
-            _df = reduce_dtypes(_df, reduce_int=True, reduce_float=True)
-
+            print(f"Collected {len(_df)} rows")
+            print(f"Size: {round(_df.memory_usage().sum() / 1e6, 2)} MB")
+            print("Shrinking...")
+            _df = shrink_dataframe(_df)
+            print(
+                f"Size after shrinking: {round(_df.memory_usage().sum() / 1e6, 2)} MB",
+            )
             print(f"Writing parquet to {args.out}")
             _df.to_parquet(args.out)
 
