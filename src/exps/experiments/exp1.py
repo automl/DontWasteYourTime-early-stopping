@@ -21,6 +21,7 @@ from exps.metrics import METRICS
 from exps.optimizers import OPTIMIZERS
 from exps.pipelines import PIPELINES
 from exps.slurm import Arg, Slurmable
+from exps.util import shrink_dataframe
 
 if TYPE_CHECKING:
     from amltk.pipeline import Node
@@ -147,9 +148,10 @@ class E1(Slurmable):
             n_splits=self.n_splits,
         )
 
-    def history(self) -> pd.DataFrame:
-        _df = pd.read_parquet(self.unique_path / "history.parquet")
-        return _df.assign(**{f"setting:{k}": v for k, v in self._values().items()})
+    def history(self, columns: list[str] | None = None) -> pd.DataFrame:
+        _df = pd.read_parquet(self.unique_path / "history.parquet", columns=columns)
+        _df = _df.assign(**{f"setting:{k}": v for k, v in self._values().items()})
+        return shrink_dataframe(_df)
 
     def python_path(self) -> Path:
         return Path(__file__)
