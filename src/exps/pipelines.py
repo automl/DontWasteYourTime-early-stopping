@@ -3,8 +3,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from amltk.pipeline import Component, Sequential, Split, request, Choice
-from ConfigSpace import Float, Integer
+import numpy as np
+from amltk.pipeline import Choice, Component, Sequential, Split, request
+from ConfigSpace import Categorical, Float, Integer
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
@@ -46,7 +48,7 @@ mlp_classifier = Sequential(
                             "handle_unknown": "infrequent_if_exist",
                         },
                     ),
-                    name="one_hot"
+                    name="one_hot",
                 ),
             ],
             "numerical": Component(
@@ -58,6 +60,8 @@ mlp_classifier = Sequential(
     ),
     Component(StandardScaler, name="standarization"),
     Component(
+        # NOTE: This space should not be used for evaluating how good this MLP is
+        # vs other algorithms
         item=MLPClassifier,
         config={
             "random_state": request("random_state", default=None),
@@ -98,6 +102,75 @@ mlp_classifier = Sequential(
     name="mlp_classifier",
 )
 
+rf_classifier = Sequential(
+    Split(
+        {
+            "categorical": [
+                Component(
+                    OrdinalEncoder,
+                    config={
+                        "categories": "auto",
+                        "handle_unknown": "use_encoded_value",
+                        "unknown_value": -1,
+                        "encoded_missing_value": -2,
+                    },
+                ),
+                Choice(
+                    "passthrough",
+                    Component(
+                        OneHotEncoder,
+                        space={"max_categories": (2, 20)},
+                        config={
+                            "categories": request("categories", default="auto"),
+                            "drop": None,
+                            "sparse_output": False,
+                            "handle_unknown": "infrequent_if_exist",
+                        },
+                    ),
+                    name="one_hot",
+                ),
+            ],
+            "numerical": Component(
+                SimpleImputer,
+                space={"strategy": ["mean", "median"]},
+            ),
+        },
+        name="encoding",
+    ),
+    Component(
+        # NOTE: This space should not be used for evaluating how good this RF is
+        # vs other algorithms
+        RandomForestClassifier,
+        space={
+            "random_state": request("random_state", default=None),
+            "criterion": ["gini", "entropy"],
+            "max_features": Categorical(
+                "max_features",
+                list(np.logspace(0.1, 1, base=10, num=10) / 10),
+                ordered=True,
+            ),
+            "min_samples_split": Integer(
+                "min_samples_split",
+                bounds=(2, 20),
+                default=2,
+            ),
+            "min_samples_leaf": Integer("min_samples_leaf", bounds=(1, 20), default=1),
+            "bootstrap": Categorical("bootstrap", [True, False], default=True),
+            "class_weight": ["balanced", "balanced_subsample", None],
+            "min_impurity_decrease": (1e-9, 1e-1),
+        },
+        config={
+            "n_estimators": 512,
+            "max_depth": None,
+            "min_weight_fraction_leaf": 0.0,
+            "max_leaf_nodes": None,
+            "warm_start": False,  # False due to no iterative fit used here
+            "n_jobs": 1,
+        },
+    ),
+)
+
 PIPELINES = {
     "mlp_classifier": mlp_classifier,
+    "rf_classifier": rf_classifier,
 }
