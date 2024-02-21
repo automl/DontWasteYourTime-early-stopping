@@ -119,7 +119,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
         case "category3":
             # This suite is running everything that had more
             # than 50 trials after 4 hours of 10 fold cross-validation
-            n_splits = [10]  # TODO: Add in 5 and 3 fold
+            n_splits = [3, 5, 10]
             folds = list(range(10))
             n_cpu = 4
             mem_per_cpu_gb = 5
