@@ -149,7 +149,13 @@ class E1(Slurmable):
         )
 
     def history(self, columns: list[str] | None = None) -> pd.DataFrame:
-        _df = pd.read_parquet(self.unique_path / "history.parquet", columns=columns)
+        cs = (
+            None
+            if columns is None
+            else [c for c in columns if not c.startswith("setting:")]
+        )
+        _df = pd.read_parquet(self.unique_path / "history.parquet", columns=cs)
+
         _df = _df.assign(**{f"setting:{k}": v for k, v in self._values().items()})
         return shrink_dataframe(_df)
 
