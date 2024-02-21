@@ -102,6 +102,14 @@ mlp_classifier = Sequential(
     name="mlp_classifier",
 )
 
+
+def rf_config_transform(config: Mapping[str, Any], _: Any) -> Mapping[str, Any]:
+    new_config = dict(config)
+    if new_config["class_weight"] == "None":
+        new_config["class_weight"] = None
+    return new_config
+
+
 rf_classifier = Sequential(
     Split(
         {
@@ -141,8 +149,8 @@ rf_classifier = Sequential(
         # NOTE: This space should not be used for evaluating how good this RF is
         # vs other algorithms
         RandomForestClassifier,
+        config_transform=rf_config_transform,
         space={
-            "random_state": request("random_state", default=None),
             "criterion": ["gini", "entropy"],
             "max_features": Categorical(
                 "max_features",
@@ -156,10 +164,11 @@ rf_classifier = Sequential(
             ),
             "min_samples_leaf": Integer("min_samples_leaf", bounds=(1, 20), default=1),
             "bootstrap": Categorical("bootstrap", [True, False], default=True),
-            "class_weight": ["balanced", "balanced_subsample", None],
+            "class_weight": ["balanced", "balanced_subsample", "None"],
             "min_impurity_decrease": (1e-9, 1e-1),
         },
         config={
+            "random_state": request("random_state", default=None),
             "n_estimators": 512,
             "max_depth": None,
             "min_weight_fraction_leaf": 0.0,
