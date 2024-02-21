@@ -1,18 +1,20 @@
-# ruff: noqa: E501
+# ruff: noqa: E501, PD010, PD013
 from __future__ import annotations
 
 from collections.abc import Hashable
 from functools import partial
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker
 import numpy as np
 import pandas as pd
+from matplotlib.lines import Line2D
 
 MARKERS = [
     ".",
     "v",
     ">",
-    ",",
+    "*",
     "o",
     "^",
     "<",
@@ -22,16 +24,19 @@ MARKERS = [
     "4",
     "s",
     "p",
-    "*",
     "h",
     "H",
+    "D",
     "+",
     "x",
-    "D",
     "d",
     "|",
     "_",
+    ",",
 ]
+X_TICKS = {
+    (0, 3600): [0, 600, 1200, 1800, 2400, 3000, 3600],
+}
 RENAMES: dict[str, str] = {
     "disabled": "no-cv-es",
     "current_average_worse_than_mean_best": "fold-worse-best-mean",
@@ -46,29 +51,39 @@ def _inc_trace(
     x_col: str,
     y_col: str,
     minimize: bool,
-    x_bounds: tuple[int | float | None, int | float | None] | None,
+    test_y_col: str,
 ) -> pd.Series:
     # We now have each individual std group to plot, i.e. the fold
     _start = df[x_start_col].min()
     _x = (df[x_col] - _start).dt.total_seconds()
-    _y = df[y_col]
+
     ind = pd.Index(_x, name="time (s)")
-    _s = pd.Series(_y.to_numpy(), index=ind, name="y").sort_index().dropna()
+    _df = (
+        df[[y_col, test_y_col]]
+        .rename(columns={y_col: "y", test_y_col: "test_y"})
+        .set_index(ind)
+        .sort_index()
+        .dropna()
+    )
 
     # Transform everything
     match minimize:
         case True:
-            _s = _s.cummin().drop_duplicates(keep="first")
+            _df["cumulative"] = _df["y"].cummin()
         case False:
-            _s = _s.cummax().drop_duplicates(keep="first")
+            _df["cumulative"] = _df["y"].cummax()
 
-    if x_bounds is not None and x_bounds[1] is not None and _s.index[-1] < x_bounds[1]:
-        _new_index = np.concatenate([_s.index, [x_bounds[1]]])
-        _new_values = np.concatenate([_s.to_numpy(), [_s.iloc[-1]]])
-        ind = pd.Index(_new_index, name="time (s)")
-        _s = pd.Series(_new_values, index=ind, name="y")
+    _df = _df.drop_duplicates(subset="cumulative", keep="first").drop(
+        columns="cumulative",
+    )
 
-    return _s
+    return pd.Series(
+        # We do this concat operation so that data is contiguous for later opertions
+        data=np.concatenate(
+            [_df["y"].to_numpy(), _df["test_y"].to_numpy()],
+        ),
+        index=pd.MultiIndex.from_product([["val", "test"], _df.index]),
+    )
 
 
 def rank_plots(  # noqa: PLR0913
@@ -196,7 +211,7 @@ def baseline_improvement_aggregated(  # noqa: PLR0913
     x_label: str | None = None,
     y_label: str | None = None,
     markevery: int | float | None = None,
-) -> plt.Axes:
+) -> tuple[plt.Figure, plt.Axes]:
     # Get the colors to use
     colors = plt.get_cmap("tab10").colors  # type: ignore
     markers = MARKERS
@@ -333,9 +348,173 @@ def baseline_improvement_aggregated(  # noqa: PLR0913
     return _ax
 
 
-def incumbent_traces_aggregated(  # noqa: PLR0913
+def ranking_plots_aggregated(  # noqa: PLR0913
     df: pd.DataFrame,
     y: str,
+    test_y: str,
+    x: str,
+    x_start: str,
+    fold: str,
+    method: str,
+    dataset: str,  # TODO: list
+    *,
+    minimize: bool = False,
+    x_bounds: tuple[int | float | None, int | float | None] | None = None,
+    fig_ax: tuple[plt.Figure, plt.Axes] | None = None,
+    x_label: str | None = None,
+    y_label: str | None = None,
+    markevery: int | float | None = None,
+) -> plt.Axes:
+    # Get the colors to use
+    colors = plt.get_cmap("tab10").colors  # type: ignore
+    markers = MARKERS
+    list(zip(colors, markers, strict=False))
+
+    def incumbent_trace(_x: pd.DataFrame) -> pd.Series:
+        return _inc_trace(
+            _x,
+            x_start_col=x_start,
+            x_col=x,
+            y_col=y,
+            test_y_col=test_y,
+            minimize=minimize,
+        )
+
+    """
+    setting:task                                                    146818  146820  168350  168757  168784  168910  168911  189922  ...  359968  359969  359970  359971  359972  359973  359975  359979
+    setting:cv_early_stop_strategy              values time (s)                                                                     ...
+    current_average_worse_than_best_worst_split test   21.595531       2.0     5.0     4.0     2.0     5.0     4.0     1.0     1.0  ...     3.0     2.0     2.0     1.0     2.0     1.0     1.0     2.0
+                                                       23.308698       2.0     5.0     4.0     2.0     5.0     4.0     1.0     1.0  ...     3.0     2.0     2.0     1.0     2.0     1.0     1.0     2.0
+                                                       23.412293       2.0     5.0     4.0     2.0     5.0     4.0     1.0     1.0  ...     3.0     2.0     2.0     1.0     2.0     1.0     1.0     2.0
+                                                       27.131684       2.0     5.0     4.0     2.0     5.0     4.0     1.0     1.0  ...     3.0     2.0     2.0     1.0     2.0     1.0     1.0     2.0
+                                                       29.640223       2.0     5.0     4.0     2.0     5.0     4.0     1.0     1.0  ...     3.0     2.0     2.0     1.0     2.0     1.0     1.0     2.0
+    ...                                                                ...     ...     ...     ...     ...     ...     ...     ...  ...     ...     ...     ...     ...     ...     ...     ...     ...
+    robust_std_top_5                            val    3576.123217     1.0     1.0     2.5     1.0     1.0     3.0     2.0     1.0  ...     1.0     5.0     4.0     2.0     1.0     4.0     3.0     3.0
+                                                       3577.107590     1.0     1.0     2.5     1.0     1.0     3.0     2.0     1.0  ...     1.0     1.0     4.0     2.0     1.0     4.0     3.0     3.0
+                                                       3583.088503     1.0     1.0     2.5     1.0     1.0     3.0     2.0     1.0  ...     1.0     5.0     4.0     2.0     1.0     4.0     3.0     3.0
+                                                       3589.155218     1.0     1.0     2.5     1.0     1.0     3.0     2.0     1.0  ...     1.0     5.0     4.0     2.0     1.0     4.0     3.0     3.0
+                                                       3591.590766     1.0     1.0     2.5     1.0     1.0     3.0     2.0     1.0  ...     1.0     5.0     4.0     2.0     1.0     4.0     3.0     3.0
+    """
+    ranks_per_dataset = (
+        df.groupby([dataset, method, fold], observed=True)
+        .apply(incumbent_trace)
+        .rename_axis(index={None: "values"})
+        .swaplevel(fold, "values")
+        .unstack([dataset, method, "values", fold])
+        .ffill()
+        .dropna()
+        .stack([dataset, method, "values"], future_stack=True)
+        .mean(axis=1)
+        .unstack(method)
+        .reorder_levels([dataset, "values", "time (s)"])
+        .sort_index()
+        .rank(axis=1, ascending=False)
+        .unstack(["values", "time (s)"])
+        .T
+    )
+
+    if fig_ax is None:
+        fig, axes = plt.subplots(1, 2, figsize=(20, 10))
+    else:
+        fig, axes = fig_ax
+
+    val_ax = axes[0]
+    test_ax = axes[1]
+
+    def extend_to_x_bound(s: pd.Series) -> pd.Series:
+        if x_bounds is not None and s.index[-1] < x_bounds[1]:  # type: ignore
+            return pd.concat([s, pd.Series([s.iloc[-1]], index=[x_bounds[1]])])
+        return s
+
+    legend_lines = []
+
+    for (method_name, _df), _color, _marker in zip(
+        ranks_per_dataset.groupby(method, observed=True),
+        colors,
+        markers,
+        strict=False,
+    ):
+        means = _df.mean(axis=1)
+        sems = _df.sem(axis=1)
+        _style = {
+            "marker": _marker,
+            "markersize": 10,
+            "markerfacecolor": "white",
+            "markeredgecolor": _color,
+            "color": _color,
+        }
+        legend_lines.append(
+            Line2D(
+                [0],
+                [0],
+                label=RENAMES.get(method_name, method_name),
+                linestyle="solid",
+                linewidth=3,
+                **_style,
+            ),
+        )
+        for _y, _ax in zip(("val", "test"), (val_ax, test_ax), strict=True):
+            _means = means.loc[method_name, _y]
+            _stds = sems.loc[method_name, _y]
+
+            _means = extend_to_x_bound(_means)
+            _stds = extend_to_x_bound(_stds)
+
+            label_name = RENAMES.get(method_name, method_name)
+
+            _means.plot(  # type: ignore
+                drawstyle="steps-post",
+                label=f"{label_name}",
+                ax=_ax,
+                linestyle="solid",
+                markevery=markevery,
+                linewidth=3,
+                **_style,
+            )
+            _ax.fill_between(
+                _means.index,  # type: ignore
+                _means - _stds,
+                _means + _stds,
+                alpha=0.2,
+                color=_color,
+                edgecolor=_color,
+                linewidth=2,
+                step="post",
+            )
+
+    for _ax, _y_set in zip((val_ax, test_ax), ("Validation", "Test"), strict=True):
+        if x_bounds:
+            _ax.set_xlim(*x_bounds)
+
+            if x_bounds in X_TICKS:
+                _ax.set_xticks(X_TICKS[x_bounds])
+                _ax.set_xticklabels([str(x) for x in X_TICKS[x_bounds]])
+
+        _ax.set_ylim(1, df[method].nunique())
+
+        _ax.set_xlabel(x_label if x_label is not None else x, fontsize="large")
+        _ax.set_ylabel(y_label if y_label is not None else y, fontsize="large")
+        N_DATASETS = df[dataset].nunique()
+        _ax.set_title(
+            f"Rank Aggregation over {N_DATASETS} Datasets ({_y_set})",
+            fontsize="x-large",
+        )
+
+    fig.legend(
+        loc="upper center",
+        handles=legend_lines,
+        bbox_to_anchor=(0.5, 0),
+        fontsize="large",
+        ncols=len(legend_lines),
+        title_fontproperties={"size": "x-large"},
+    )
+    return fig, axes
+
+
+def incumbent_traces_aggregated(  # noqa: PLR0913, C901
+    df: pd.DataFrame,
+    y: str,
+    test_y: str,
     x: str,
     x_start: str,
     fold: str,
@@ -346,7 +525,7 @@ def incumbent_traces_aggregated(  # noqa: PLR0913
     log_y: bool = False,
     x_bounds: tuple[int | float | None, int | float | None] | None = None,
     y_bounds: tuple[int | float | None, int | float | None] | None = None,
-    ax: plt.Axes | None = None,
+    fig_ax: tuple[plt.Figure, plt.Axes] | None = None,
     x_label: str | None = None,
     y_label: str | None = None,
     invert: bool = False,
@@ -363,97 +542,140 @@ def incumbent_traces_aggregated(  # noqa: PLR0913
             x_start_col=x_start,
             x_col=x,
             y_col=y,
+            test_y_col=test_y,
             minimize=minimize,
-            x_bounds=x_bounds,
         )
 
-    data = (
-        # Get the incumbent trace for each (dataset, method, fold)
-        # Gives: index=(dataset, method, fold, time) col=(,) values=(inc)
-        df.groupby([dataset, method, fold], observed=True)  # noqa: PD010
+    inc_traces_per_dataset = (
+        df.groupby([dataset, method, fold], observed=True)
         .apply(incumbent_trace)
-        # Make method and fold columns
-        # Gives: index=(dataset, time), col=(method, fold) values=(inc)
-        .unstack([method, fold])
-        # Groupby together each (dataset,) and apply a ffill to each (method, fold) over (time,)
-        # Gives: index=(dataset, time), col=(method, fold) values=(inc-ffilled)
-        .groupby(dataset, observed=True)
+        .rename_axis(index={None: "values"})
+        .swaplevel(fold, "values")  # type: ignore
+        .unstack(fold)
+        .groupby([dataset, method, "values"], observed=True)
         .ffill()
-        # Take mean across folds for the method
-        # Gives: index=(dataset, time), col=(method,) values=(mean_inc_across_folds)
-        .groupby(level=method, axis=1, observed=True)
-        .mean()
-        # Min/max each mean-inc-trace by the min/max of all observed values for the dataset
-        # Gives: index=(dataset, time), col=(method,) values=(normalized-mean-inc-across-folds)
-        .groupby(dataset, observed=True, group_keys=False)
-        .apply(lambda x: (x - x.min().min()) / (x.max().max() - x.min().min()))
-        # Pop off the dataset index, and ffill so we can then mean across it
-        # Gives: index=(time), col=(method,dataset) values=(normalized-mean-inc-across-folds)
+        .mean(axis=1)
         .unstack(dataset)
+        .groupby([method, "values"], observed=True)
         .ffill()
+        .dropna()  # We can only being aggregating once we have a value for each dataset
+        .unstack("values")
+        .transform(lambda x: (x - x.min()) / (x.max() - x.min()))
+        .transform(lambda x: 1 - x if invert else x)
+        .stack("values")
+        .swaplevel("time (s)", "values")
+        .sort_index()
     )
 
-    # Our data now looks like this
-    """
-    setting:cv_early_stop_strategy                                  current_average_worse_than_best_worst_split                                                                                                                                           ... robust_std_top_5
-    setting:task                                                        146818    146820    168350    168757    168784   168910    168911    189922 190137 190146    190392    190410 190411    190412    359953 359954  ...           359959 359960    359961    359962 359963 359964    359965 359967    359968    359969    359970    359971    359972 359973 359975    359979
-    time (s)                                                                                                                                                                                                             ...
-    1.011305                                                               NaN       NaN       NaN       NaN       NaN      NaN       NaN       NaN    NaN    NaN       NaN       NaN    NaN       NaN       NaN    NaN  ...              NaN    NaN       NaN       NaN    NaN    NaN       NaN    NaN       NaN       NaN       NaN       NaN       NaN    NaN    NaN       NaN
-    1.016992                                                               NaN       NaN       NaN       NaN       NaN      NaN       NaN       NaN    NaN    NaN       NaN       NaN    NaN       NaN       NaN    NaN  ...              NaN    NaN       NaN       NaN    NaN    NaN       NaN    NaN       NaN       NaN       NaN       NaN       NaN    NaN    NaN       NaN
-    1.017846                                                               NaN       NaN       NaN       NaN       NaN      NaN       NaN       NaN    NaN    NaN       NaN       NaN    NaN       NaN       NaN    NaN  ...              NaN    NaN       NaN       NaN    NaN    NaN       NaN    NaN       NaN       NaN       NaN       NaN       NaN    NaN    NaN       NaN
-    1.022772                                                               NaN       NaN       NaN       NaN       NaN      NaN       NaN       NaN    NaN    NaN       NaN       NaN    NaN       NaN       NaN    NaN  ...              NaN    NaN       NaN       NaN    NaN    NaN       NaN    NaN       NaN       NaN       NaN       NaN       NaN    NaN    NaN       NaN
-    1.024474                                                               NaN       NaN       NaN       NaN       NaN      NaN       NaN       NaN    NaN    NaN       NaN       NaN    NaN       NaN       NaN    NaN  ...              NaN    NaN       NaN       NaN    NaN    NaN       NaN    NaN       NaN       NaN       NaN       NaN       NaN    NaN    NaN       NaN
-    ...                                                                    ...       ...       ...       ...       ...      ...       ...       ...    ...    ...       ...       ...    ...       ...       ...    ...  ...              ...    ...       ...       ...    ...    ...       ...    ...       ...       ...       ...       ...       ...    ...    ...       ...
-    3587.761974                                                       0.966475  0.999956  0.991856  0.966388  0.985812  0.97294  0.952077  0.968142    1.0    1.0  0.753457  0.998171    1.0  0.956321  0.989934    1.0  ...         0.983291    1.0  0.992377  0.885627    1.0    1.0  0.966052    1.0  0.995941  0.986114  0.981243  0.995812  0.985233    1.0    1.0  0.861138
-    3587.914040                                                       0.966475  0.999956  0.991856  0.966388  0.985812  0.97294  0.952077  0.968142    1.0    1.0  0.753457  0.998171    1.0  0.956321  0.989934    1.0  ...         0.983291    1.0  0.992377  0.885627    1.0    1.0  0.966052    1.0  0.995941  0.986114  0.981243  0.995812  0.985233    1.0    1.0  0.861138
-    3587.954826                                                       0.966475  0.999956  0.991856  0.966388  0.985812  0.97294  0.952077  0.968142    1.0    1.0  0.753457  0.998171    1.0  0.956321  0.989934    1.0  ...         0.983291    1.0  0.992377  0.885627    1.0    1.0  0.966052    1.0  0.995941  0.986114  0.981243  0.995812  0.985233    1.0    1.0  0.861138
-    3589.325142                                                       0.966475  0.999956  0.991856  0.971617  0.985812  0.97294  0.952077  0.968142    1.0    1.0  0.753457  0.998171    1.0  0.956321  0.989934    1.0  ...         0.983291    1.0  0.992377  0.885627    1.0    1.0  0.966052    1.0  0.995941  0.986114  0.981243  0.995812  0.985233    1.0    1.0  0.861138
-    3600.000000                                                       0.966475  0.999956  0.991856  0.971617  0.985812  0.97294  0.952077  0.968142    1.0    1.0  0.753457  0.998171    1.0  0.956321  0.989934    1.0  ...         0.983291    1.0  0.992377  0.885627    1.0    1.0  0.966052    1.0  0.995941  0.986114  0.981243  0.995812  0.985233    1.0    1.0  0.861138
-    """
-
-    if ax is None:
-        _, _ax = plt.subplots(1, 1, figsize=(10, 10))
+    if fig_ax is None:
+        fig, axes = plt.subplots(1, 2, figsize=(20, 10))
     else:
-        _ax = ax
+        fig, axes = fig_ax
 
-    for method_name, method_group in data.T.groupby(level=method, observed=True):
-        method_group = method_group.T  # noqa: PLW2901
-        _means = method_group.mean(axis=1)
-        _stds = method_group.sem(axis=1)
+    val_ax = axes[0]
+    test_ax = axes[1]
 
-        if invert:
-            _means = 1 - _means
+    def extend_to_x_bound(s: pd.Series) -> pd.Series:
+        if x_bounds is not None and s.index[-1] < x_bounds[1]:  # type: ignore
+            return pd.concat([s, pd.Series([s.iloc[-1]], index=[x_bounds[1]])])
+        return s
 
-        label_name = RENAMES.get(method_name, method_name)
-        _means.plot(  # type: ignore
-            drawstyle="steps-post",
-            label=f"{label_name}",
-            markevery=markevery,
-            ax=_ax,
+    legend_lines = []
+
+    for (method_name, _df), _color, _marker in zip(
+        inc_traces_per_dataset.groupby(method, observed=True),
+        colors,
+        markers,
+        strict=False,
+    ):
+        # We dropna across the dataframe so that when we take mean/std, it's only
+        # once we have a datapoint for each dataset (~40s)
+        means = _df.mean(axis=1)
+        sems = _df.sem(axis=1)
+        _style = {
+            "marker": _marker,
+            "markersize": 10,
+            "markerfacecolor": "white",
+            "markeredgecolor": _color,
+            "color": _color,
+        }
+        legend_lines.append(
+            Line2D(
+                [0],
+                [0],
+                label=RENAMES.get(method_name, method_name),
+                linestyle="solid",
+                linewidth=3,
+                **_style,
+            ),
         )
-        _ax.fill_between(
-            _means.index,  # type: ignore
-            _means - _stds,
-            _means + _stds,
-            alpha=0.2,
-            step="post",
+        for _y, _ax in zip(("val", "test"), (val_ax, test_ax), strict=True):
+            _means = means.loc[method_name, _y]
+            _stds = sems.loc[method_name, _y]
+
+            _means = extend_to_x_bound(_means)
+            _stds = extend_to_x_bound(_stds)
+
+            label_name = RENAMES.get(method_name, method_name)
+
+            _means.plot(  # type: ignore
+                drawstyle="steps-post",
+                label=f"{label_name}",
+                ax=_ax,
+                linestyle="solid",
+                markevery=markevery,
+                linewidth=3,
+                **_style,
+            )
+            _ax.fill_between(
+                _means.index,  # type: ignore
+                _means - _stds,
+                _means + _stds,
+                alpha=0.2,
+                color=_color,
+                edgecolor=_color,
+                linewidth=2,
+                step="post",
+            )
+
+    for _ax, _y_set in zip((val_ax, test_ax), ("Validation", "Test"), strict=True):
+        if x_bounds:
+            _ax.set_xlim(*x_bounds)
+
+            if x_bounds in X_TICKS:
+                _ax.set_xticks(X_TICKS[x_bounds])
+                _ax.set_xticklabels([str(x) for x in X_TICKS[x_bounds]])
+
+        if y_bounds:
+            _ax.set_ylim(*y_bounds)
+
+        if log_y:
+            _ax.set_yscale("log")
+
+        # Define custom formatter function to format tick labels as decimals
+        def format_func(value: float, _: int):
+            return f"{value:.1f}"
+
+        # Apply the custom formatter to the y-axis
+        _ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(format_func))
+
+        _ax.set_xlabel(x_label if x_label is not None else x, fontsize="large")
+        _ax.set_ylabel(y_label if y_label is not None else y, fontsize="large")
+        N_DATASETS = df[dataset].nunique()
+        _ax.set_title(
+            f"Aggregation over {N_DATASETS} Datasets ({_y_set})",
+            fontsize="x-large",
         )
 
-    if x_bounds:
-        _ax.set_xlim(*x_bounds)
-
-    if y_bounds:
-        _ax.set_ylim(*y_bounds)
-
-    if log_y:
-        _ax.set_yscale("log")
-
-    _ax.set_xlabel(x_label if x_label is not None else x)
-    _ax.set_ylabel(y_label if y_label is not None else y)
-    _ax.set_title("Aggregated")
-    _ax.legend()
-
-    return _ax
+    fig.legend(
+        loc="upper center",
+        handles=legend_lines,
+        bbox_to_anchor=(0.5, 0),
+        fontsize="large",
+        ncols=len(legend_lines),
+        title_fontproperties={"size": "x-large"},
+    )
+    return fig, axes
 
 
 def incumbent_traces(  # noqa: PLR0913

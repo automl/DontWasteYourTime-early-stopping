@@ -16,6 +16,7 @@ from exps.plots import (
     incumbent_traces,
     incumbent_traces_aggregated,
     rank_plots,
+    ranking_plots_aggregated,
 )
 from exps.slurm import seconds_to_slurm_time
 from exps.tasks import TASKS
@@ -244,6 +245,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
                 "incumbent",
                 "baseline-normalized",
                 "ranks",
+                "ranks-aggregated",
                 "incumbent-aggregated",
             ],
         )
@@ -289,6 +291,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
                 incumbent_traces_aggregated(
                     _df,
                     y=f"metric:{metric}",
+                    test_y=f"summary:test_bagged_{metric.name}",
                     method="setting:cv_early_stop_strategy",
                     fold="setting:fold",
                     dataset="setting:task",
@@ -297,10 +300,26 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     x_label="Time (s)",
                     y_label="1 - (normalized) ROC AUC [OVR]",
                     x_bounds=(0, time_limit),
-                    y_bounds=(1e-2, 1),
+                    # y_bounds=(1e-1, 1),
                     minimize=metric.minimize,
                     invert=True,
                     log_y=True,
+                    markevery=0.1,
+                )
+            case "ranks-aggregated":
+                ranking_plots_aggregated(
+                    _df,
+                    y=f"metric:{metric}",
+                    test_y=f"summary:test_bagged_{metric.name}",
+                    method="setting:cv_early_stop_strategy",
+                    fold="setting:fold",
+                    dataset="setting:task",
+                    x="reported_at",
+                    x_start="created_at",
+                    x_label="Time (s)",
+                    y_label="Rank",
+                    x_bounds=(0, time_limit),
+                    minimize=metric.minimize,
                     markevery=0.1,
                 )
             case "ranks":
@@ -339,7 +358,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
                 )
             case _:
                 print(f"Unknown kind {args.kind}")
-        plt.savefig(args.out)
+        plt.savefig(args.out, bbox_inches="tight")
         return
 
     experiments = experiment_set(args.expname)
