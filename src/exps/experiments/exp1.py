@@ -12,6 +12,7 @@ import sklearn
 from amltk.optimization import Trial
 from amltk.sklearn.evaluation import CVEvaluation
 from amltk.sklearn.voting import voting_with_preffited_estimators
+from amltk.store import PathBucket
 from sklearn.ensemble import VotingClassifier, VotingRegressor
 from sklearn.metrics._scorer import _MultimetricScorer
 
@@ -142,7 +143,7 @@ class E1(Slurmable):
         return get_fold(
             self.task,
             self.fold,
-            seed=self.experiment_seed,
+            seed=self.experiment_seed + self.fold,
             n_splits=self.n_splits,
         )
 
@@ -234,7 +235,7 @@ def run_it(run: E1) -> None:
             metric=metric,
             n_workers=run.n_cpus,
             optimizer=OPTIMIZERS[run.optimizer],
-            seed=run.experiment_seed,
+            seed=run.experiment_seed + run.fold,
             plugins=plugins,  # CV early stopping passed in here
             process_memory_limit=None,
             process_walltime_limit=None,
@@ -248,8 +249,7 @@ def run_it(run: E1) -> None:
         # empty folders.
         @task.on_result
         def _cleanup_after_trial(_: Future, report: Trial.Report) -> None:
-            if not any(report.bucket.keys()):
-                report.bucket.rmdir()
+            report.bucket.rmdir()
 
         scheduler.run(
             timeout=run.time_seconds,
@@ -277,6 +277,7 @@ def run_it(run: E1) -> None:
         try:
             # Remove the data
             evaluator.bucket.rmdir()
+            PathBucket(run.unique_path / "optimizer").rmdir()
         except Exception as e:  # noqa: BLE001
             # We do not want to raise here as it's just cleanup
             print(e)
