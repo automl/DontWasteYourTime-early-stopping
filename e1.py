@@ -14,6 +14,7 @@ from exps.metrics import METRICS
 from exps.plots import (
     incumbent_traces_aggregated,
     ranking_plots_aggregated,
+    speedup_plots,
 )
 from exps.slurm import seconds_to_slurm_time
 from exps.tasks import TASKS
@@ -269,9 +270,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
             "--kind",
             type=str,
             choices=[
-                "incumbent",
-                "baseline-normalized",
-                "ranks",
+                "speedups",
                 "ranks-aggregated",
                 "incumbent-aggregated",
             ],
@@ -338,6 +337,20 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     x_bounds=(0, time_limit),
                     minimize=metric.minimize,
                     markevery=0.1,
+                )
+            case "speedups":
+                speedup_plots(
+                    _df,
+                    y=f"metric:{metric}",
+                    baseline="disabled",
+                    test_y=f"summary:test_bagged_{metric.name}",
+                    method="setting:cv_early_stop_strategy",
+                    fold="setting:fold",
+                    dataset="setting:task",
+                    x="reported_at",
+                    x_start="created_at",
+                    x_label="Time (s)",
+                    title="TODO",
                 )
             case _:
                 print(f"Unknown kind {args.kind}")
