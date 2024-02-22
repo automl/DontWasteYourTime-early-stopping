@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from itertools import product
+from itertools import chain, product
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, TypeAlias
 
@@ -33,8 +33,7 @@ EXP_NAME: TypeAlias = Literal[
     "category4-nsplits-10",
     "category4-nsplits-5",
     "category4-nsplits-3",
-    "category5-nsplits-10-report-fail",
-    "category5-nsplits-10-report-mean",
+    "category5-nsplits-10",
 ]
 EXP_CHOICES = [
     "debug",
@@ -45,8 +44,7 @@ EXP_CHOICES = [
     "category4-nsplits-10",  # RF pipeline
     "category4-nsplits-5",  # RF pipeline
     "category4-nsplits-3",  # RF pipeline
-    "category5-nsplits-10-report-fail"  # SMAC MLP pipeline, report early stop as fail
-    "category5-nsplits-10-report-mean",  # SMAC MLP pipeline, report early fold mean
+    "category5-nsplits-10",  # {Default SMAC, SMAC w/ early stop mean report} MLP
 ]
 
 
@@ -89,7 +87,7 @@ def exp_name_to_result_dir(exp_name: EXP_NAME) -> Path:
             return Path("results-category3").resolve()
         case "category4-nsplits-10" | "category4-nsplits-5" | "category4-nsplits-3":
             return Path("results-category4").resolve()
-        case "category5-nsplits-10-report-fail" | "category5-nsplits-10-report-mean":
+        case "category5-nsplits-10":
             return Path("results-category5").resolve()
         case "debug":
             return Path("results-debug").resolve()
@@ -97,7 +95,23 @@ def exp_name_to_result_dir(exp_name: EXP_NAME) -> Path:
             raise ValueError(f"Unknown experiment set: {exp_name}")
 
 
-def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
+def experiment_set(name: EXP_NAME) -> list[E1]:
+    # Defaults unless overwritten by an experiment set below
+    time_seconds = 1 * 60 * 60
+    folds = list(range(10))
+    mem_per_cpu_gb = 5
+    n_cpu = 4
+    metric = "roc_auc_ovr"
+    pipeline = "mlp_classifier"
+    experiment_fixed_seed = 42
+    optimizers = ["random_search"]
+    suite = TASKS["amlb_4hr_10cv_more_than_50_trials"]
+    result_dir = exp_name_to_result_dir(name)
+
+    # Must be set
+    n_splits: list[int]
+    methods: list[str]
+
     match name:
         case "time-analysis":
             # This suite runs the full automlbenchmark with our maximum cv splits, such
@@ -108,23 +122,11 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
             n_splits = [10]
             folds = [0]  # We only need 1 outfold from openml to analise
             n_cpu = 1
-            mem_per_cpu_gb = 5
             time_seconds = 4 * 60 * 60
-            optimizers = ["random_search"]
             suite = TASKS["amlb_classification_full"]
-            pipeline = "mlp_classifier"
-            metric = "roc_auc_ovr"
             methods = ["disabled"]
-            experiment_fixed_seed = 42
         case "category3-nsplits-10":
-            # This suite is running everything that had more
-            # than 50 trials after 4 hours of 10 fold cross-validation
             n_splits = [10]
-            folds = list(range(10))
-            n_cpu = 4
-            mem_per_cpu_gb = 5
-            time_seconds = 1 * 60 * 60
-            optimizers = ["random_search"]  # TODO: SMAC
             methods = [
                 "disabled",
                 "current_average_worse_than_best_worst_split",
@@ -132,19 +134,8 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
                 "robust_std_top_3",
                 "robust_std_top_5",
             ]
-            suite = TASKS["amlb_4hr_10cv_more_than_50_trials"]
-            pipeline = "mlp_classifier"
-            metric = "roc_auc_ovr"
-            experiment_fixed_seed = 42
         case "category3-nsplits-5":
-            # This suite is running everything that had more
-            # than 50 trials after 4 hours of 10 fold cross-validation
             n_splits = [5]
-            folds = list(range(10))
-            n_cpu = 4
-            mem_per_cpu_gb = 5
-            time_seconds = 1 * 60 * 60
-            optimizers = ["random_search"]  # TODO: SMAC
             methods = [
                 "disabled",
                 "current_average_worse_than_best_worst_split",
@@ -152,19 +143,10 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
                 "robust_std_top_3",
                 "robust_std_top_5",
             ]
-            suite = TASKS["amlb_4hr_10cv_more_than_50_trials"]
-            pipeline = "mlp_classifier"
-            metric = "roc_auc_ovr"
-            experiment_fixed_seed = 42
         case "category3-nsplits-3":
             # This suite is running everything that had more
             # than 50 trials after 4 hours of 10 fold cross-validation
             n_splits = [3]
-            folds = list(range(10))
-            n_cpu = 4
-            mem_per_cpu_gb = 5
-            time_seconds = 1 * 60 * 60
-            optimizers = ["random_search"]  # TODO: SMAC
             methods = [
                 "disabled",
                 "current_average_worse_than_best_worst_split",
@@ -172,19 +154,11 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
                 "robust_std_top_3",
                 "robust_std_top_5",
             ]
-            suite = TASKS["amlb_4hr_10cv_more_than_50_trials"]
-            pipeline = "mlp_classifier"
-            metric = "roc_auc_ovr"
-            experiment_fixed_seed = 42
         case "category4-nsplits-10":
             # This suite is running everything that had more
             # than 50 trials after 4 hours of 10 fold cross-validation
-            n_splits = [10]  # TODO: Add in 5 and 3 fold
-            folds = list(range(10))
-            n_cpu = 4
-            mem_per_cpu_gb = 5
-            time_seconds = 1 * 60 * 60
-            optimizers = ["random_search"]  # TODO: SMAC
+            n_splits = [10]
+            pipeline = "rf_classifier"
             methods = [
                 "disabled",
                 "current_average_worse_than_best_worst_split",
@@ -192,30 +166,76 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
                 "robust_std_top_3",
                 "robust_std_top_5",
             ]
-            suite = TASKS["amlb_4hr_10cv_more_than_50_trials"]
-            pipeline = "rf_classifier"
-            metric = "roc_auc_ovr"
-            experiment_fixed_seed = 42
+        case "category5-nsplits-10":
+            # We have to return specifically for this as we don't want a full product of
+            # experiments. This is because the "smac_early_stop_with_fold_mean" makes no
+            # sense to run when early stopping is disabled, it will behave the same as
+            # "smac_early_stop_as_failed" which is default SMAC
+            n_splits = [10]
+            opt_method_set_1 = product(
+                ["smac_early_stop_as_failed"],
+                [
+                    "disabled",
+                    "current_average_worse_than_best_worst_split",
+                    "current_average_worse_than_mean_best",
+                    "robust_std_top_3",
+                    "robust_std_top_5",
+                ],
+            )
+            opt_method_set_2 = product(
+                ["smac_early_stop_with_fold_mean"],
+                [
+                    # No "disabled" as it makes no sense to run with early stopping
+                    "current_average_worse_than_best_worst_split",
+                    "current_average_worse_than_mean_best",
+                    "robust_std_top_3",
+                    "robust_std_top_5",
+                ],
+            )
+            opt_methods = chain(opt_method_set_1, opt_method_set_2)
+            return [
+                E1(
+                    # Parameters defining experiments
+                    task=task,
+                    fold=fold,
+                    n_splits=n_splits,
+                    # Constants for now
+                    pipeline=pipeline,
+                    n_cpus=n_cpu,
+                    optimizer=optimizer,
+                    memory_gb=mem_per_cpu_gb * n_cpu,
+                    time_seconds=time_seconds,
+                    experiment_seed=experiment_fixed_seed,
+                    minimum_trials=1,  # Takes no effect...
+                    metric=metric,
+                    # Extra
+                    wait=False,
+                    root=result_dir,
+                    cv_early_stop_strategy=method,
+                    openml_cache_directory=(Path() / ".openml-cache").resolve(),
+                )
+                for task, fold, n_splits, (optimizer, method) in product(
+                    suite,
+                    folds,
+                    n_splits,
+                    opt_methods,
+                )
+            ]
+
         case "debug":
             n_splits = [3]
             folds = [0]
-            n_cpu = 4
-            mem_per_cpu_gb = 5
             time_seconds = 30
             optimizers = [
                 "smac",
                 "smac_early_stop_as_failed",
                 "smac_early_stop_with_fold_mean",
             ]
-            suite = TASKS["debug"]
-            pipeline = "mlp_classifier"
-            metric = "roc_auc_ovr"
             methods = ["current_average_worse_than_best_worst_split"]
-            experiment_fixed_seed = 42
+            suite = TASKS["debug"]
         case _:
             raise ValueError(f"Unknown experiment set: {name}")
 
-    result_dir = exp_name_to_result_dir(name)
     return [
         E1(
             # Parameters defining experiments
