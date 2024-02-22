@@ -84,7 +84,7 @@ def exp_name_to_result_dir(exp_name: EXP_NAME) -> Path:
         case "category3-nsplits-10" | "category3-nsplits-5" | "category3-nsplits-3":
             return Path("results-category3").resolve()
         case "category4-nsplits-10" | "category4-nsplits-5" | "category4-nsplits-3":
-            return Path("results-category3").resolve()
+            return Path("results-category4").resolve()
         case "debug":
             return Path("results-debug").resolve()
         case _:
