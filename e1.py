@@ -33,6 +33,8 @@ EXP_NAME: TypeAlias = Literal[
     "category4-nsplits-10",
     "category4-nsplits-5",
     "category4-nsplits-3",
+    "category5-nsplits-10-report-fail",
+    "category5-nsplits-10-report-mean",
 ]
 EXP_CHOICES = [
     "debug",
@@ -43,6 +45,8 @@ EXP_CHOICES = [
     "category4-nsplits-10",  # RF pipeline
     "category4-nsplits-5",  # RF pipeline
     "category4-nsplits-3",  # RF pipeline
+    "category5-nsplits-10-report-fail"  # SMAC MLP pipeline, report early stop as fail
+    "category5-nsplits-10-report-mean",  # SMAC MLP pipeline, report early fold mean
 ]
 
 
@@ -85,6 +89,8 @@ def exp_name_to_result_dir(exp_name: EXP_NAME) -> Path:
             return Path("results-category3").resolve()
         case "category4-nsplits-10" | "category4-nsplits-5" | "category4-nsplits-3":
             return Path("results-category4").resolve()
+        case "category5-nsplits-10-report-fail" | "category5-nsplits-10-report-mean":
+            return Path("results-category5").resolve()
         case "debug":
             return Path("results-debug").resolve()
         case _:
@@ -196,11 +202,15 @@ def experiment_set(name: EXP_NAME) -> list[E1]:  # noqa: PLR0915
             n_cpu = 4
             mem_per_cpu_gb = 5
             time_seconds = 30
-            optimizers = ["random_search"]
+            optimizers = [
+                "smac",
+                "smac_early_stop_as_failed",
+                "smac_early_stop_with_fold_mean",
+            ]
             suite = TASKS["debug"]
-            pipeline = "rf_classifier"
+            pipeline = "mlp_classifier"
             metric = "roc_auc_ovr"
-            methods = ["disabled"]
+            methods = ["current_average_worse_than_best_worst_split"]
             experiment_fixed_seed = 42
         case _:
             raise ValueError(f"Unknown experiment set: {name}")

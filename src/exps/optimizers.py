@@ -6,15 +6,65 @@ from typing import TYPE_CHECKING, Any, Concatenate, overload
 from typing_extensions import Self, override
 
 import amltk.randomness
+import numpy as np
+from amltk.exceptions import CVEarlyStoppedError
 from amltk.optimization import Metric, Trial
 from amltk.optimization.optimizer import Optimizer
-from amltk.optimization.optimizers.smac import SMACOptimizer
+from amltk.optimization.optimizers.smac import SMACOptimizer, SMACTrialInfo
 from amltk.store import PathBucket
 
 if TYPE_CHECKING:
     from amltk.pipeline import Node
     from amltk.types import Seed
     from ConfigSpace import Configuration
+
+
+class SMACReportEarlyStopAsFailed(SMACOptimizer):
+    @override
+    def tell(self, report: Trial.Report[SMACTrialInfo]) -> None:
+        """We don't really need to overwrite anything as this is default behaviour."""
+        return super().tell(report)
+
+
+class SMACReportEarlyStopWithFoldMean(SMACOptimizer):
+    @override
+    def tell(self, report: Trial.Report[SMACTrialInfo]) -> None:
+        """If a trial was report as failed, we convert it to a success by taking
+        the mean of the fold means and using that as the performance to report to SMAC.
+        """
+        print(report)
+        print(report.status)
+        print(report.exception)
+        print(type(report.exception))
+        match report.status:
+            # In the case of success or crash, nothing to change
+            case Trial.Status.SUCCESS | Trial.Status.CRASHED | Trial.Status.UNKNOWN:
+                return super().tell(report)
+            case Trial.Status.FAIL if isinstance(report.exception, CVEarlyStoppedError):
+                print("IN HERE")
+                # Howeever when a trial fails due to early stopping, we create a
+                # success report instead, using the mean of fold scores as the value.
+                trial = report.trial
+                metric = next(iter(self.metrics.values()))
+                fold_scores = [
+                    v
+                    for k, v in trial.summary.items()
+                    if k.startswith("split_") and k.endswith(f"val_{metric.name}")
+                ]
+                mean_fold_score = float(np.mean(fold_scores))
+
+                success_report = Trial.Report(
+                    trial=trial,
+                    status=Trial.Status.SUCCESS,
+                    exception=report.exception,
+                    traceback=report.traceback,
+                    reported_at=report.reported_at,
+                    values={metric.name: mean_fold_score},
+                )
+                return super().tell(success_report)
+            case _:
+                # In all other cases, we just pass the report as is.
+                return super().tell(report)
 
 
 class RSOptimizer(Optimizer):
@@ -116,4 +166,6 @@ class RSOptimizer(Optimizer):
 OPTIMIZERS = {
     "smac": SMACOptimizer,
     "random_search": RSOptimizer,
+    "smac_early_stop_as_failed": SMACReportEarlyStopAsFailed,
+    "smac_early_stop_with_fold_mean": SMACReportEarlyStopWithFoldMean,
 }
