@@ -175,6 +175,9 @@ TASKS = {
     "amlb_classification_full": AMLB_CLASSIFICATION_FULL,
     "amlb_classification_less_than_50k": AMLB_CLASSIFICATION_SMALL_LESS_THAN_50K,
     "amlb_4hr_10cv_more_than_50_trials": AMLB_4HR_10CV_MORE_THAN_50_TRIALS,
-    "amlb_4hr_10cv_less_than_50_trials": AMLB_4HR_10CV_MORE_THAN_50_TRIALS,
+    "amlb_4hr_10cv_less_than_50_trials": AMLB_4HR_10CV_LESS_THAN_50_TRIALS,
     "debug": [31],
 }
+
+if __name__ == "__main__":
+    print(len(AMLB_CLASSIFICATION_FULL))
