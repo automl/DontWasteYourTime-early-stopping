@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 import openml
 import pandas as pd
+import pyarrow.parquet as pq
 import sklearn
 from amltk.optimization import Trial
 from amltk.sklearn.evaluation import CVEvaluation
@@ -154,8 +155,17 @@ class E1(Slurmable):
             if columns is None
             else [c for c in columns if not c.startswith("setting:")]
         )
-        _df = pd.read_parquet(self.unique_path / "history.parquet", columns=cs)
+        history_path = self.unique_path / "history.parquet"
 
+        # Unfortunatly, if we are loading config columns, it could be the case
+        # that some column is not present in the parquet file. To alleviate this,
+        # we directly read the schema to got the column that are available.
+        if cs is not None:
+            parquet_file = pq.ParquetFile(history_path)
+            present_columns = parquet_file.schema.names
+            cs = [c for c in cs if c in present_columns]
+
+        _df = pd.read_parquet(history_path, columns=cs)
         _df = _df.assign(**{f"setting:{k}": v for k, v in self._values().items()})
         return shrink_dataframe(_df)
 

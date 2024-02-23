@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from rich import print
 
-from exps.experiments.exp1 import E1
+from exps.experiments.exp1 import E1, PIPELINES
 from exps.metrics import METRICS
 from exps.plots import (
     incumbent_traces_aggregated,
@@ -48,13 +48,16 @@ EXP_CHOICES = [
 ]
 
 
-def cols_needed_for_plotting(metric: Metric | str, n_splits: int) -> list[str]:
+def cols_needed_for_plotting(
+    metric: Metric | str, n_splits: int | None = None
+) -> list[str]:
     if isinstance(metric, str):
         metric = METRICS[metric]
 
     CORE = [
         "created_at",
         "reported_at",
+        "status",
         "setting:fold",
         "setting:metric",
         "setting:optimizer",
@@ -70,10 +73,13 @@ def cols_needed_for_plotting(metric: Metric | str, n_splits: int) -> list[str]:
         f"summary:test_std_{metric.name}",
         f"summary:test_bagged_{metric.name}",
     ]
-    SPLIT_COLS = [
-        f"summary:split_{split}:{kind}_{metric.name}"
-        for kind, split in product(("val", "test"), range(n_splits))
-    ]
+    if n_splits is not None:
+        SPLIT_COLS = [
+            f"summary:split_{split}:{kind}_{metric.name}"
+            for kind, split in product(("val", "test"), range(n_splits))
+        ]
+    else:
+        SPLIT_COLS = []
     return CORE + METRIC_COLS + SPLIT_COLS
 
 
@@ -290,6 +296,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
         p.add_argument("--fail-early", action="store_true")
         p.add_argument("--ignore", nargs="+", type=str)
         p.add_argument("--out", type=Path, required=True)
+        p.add_argument("--no-config", action="store_true")
 
     with cmds("plot") as p:
         p.add_argument("--out", type=Path, required=True)
@@ -447,6 +454,16 @@ def main():  # noqa: C901, PLR0915, PLR0912
                 metric=METRICS[first.metric],
                 n_splits=first.n_splits,
             )
+
+            if not args.no_config:
+                columns_to_load += [
+                    f"config:{k}"
+                    for k in PIPELINES[first.pipeline].search_space(
+                        parser="configspace",
+                    )
+                ]
+
+            print(f"Columns to load: {columns_to_load}")
 
             print(f"Collecting {len(array)} histories.")
             _df = pd.concat([exp.history(columns=columns_to_load) for exp in array])
