@@ -1,10 +1,10 @@
 from __future__ import annotations
-from collections import defaultdict
 
 import sys
+from collections import defaultdict
 from itertools import chain, product
 from pathlib import Path
-from typing import TYPE_CHECKING, Counter, Literal, TypeAlias
+from typing import TYPE_CHECKING, Literal, TypeAlias
 
 import pandas as pd
 from rich import print
@@ -502,7 +502,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
                 print(f"{status}: {len(exps)}")
 
             to_submit = list(
-                chain.from_iterable(exps_by_status[s] for s in args.overwrite_by)
+                chain.from_iterable(exps_by_status[s] for s in args.overwrite_by),
             )
             if not any(to_submit):
                 print(f"Nothing to run from {len(experiments)} experiments.")
