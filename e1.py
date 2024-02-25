@@ -336,7 +336,6 @@ def main():  # noqa: C901, PLR0915, PLR0912
     with cmds("plot") as p:
         p.add_argument("--outpath", type=Path, default=Path("./plots"))
         p.add_argument("--prefix", type=str, required=True)
-        p.add_argument("--filetype", choices=["pdf", "png"], required=True, type=str)
         p.add_argument("--metric", type=str, choices=METRICS.keys(), required=True)
         p.add_argument("--n-splits", type=int, required=True)
         p.add_argument("--time-limit", type=int, required=True)
@@ -367,8 +366,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
     if args.command == "plot":
         import matplotlib.pyplot as plt
 
-        args.path.mkdir(parents=True, exist_ok=True)
-        filepath = args.path / f"{args.prefix}-{args.kind}.{args.filetype}"
+        args.outpath.mkdir(parents=True, exist_ok=True)
 
         metric = METRICS[args.metric]
         time_limit = args.time_limit
@@ -432,7 +430,9 @@ def main():  # noqa: C901, PLR0915, PLR0912
             case _:
                 print(f"Unknown kind {args.kind}")
 
-        plt.savefig(filepath, bbox_inches="tight")
+        for ext in ["pdf", "png"]:
+            filepath = args.outpath / f"{args.prefix}-{args.kind}.{ext}"
+            plt.savefig(filepath, bbox_inches="tight")
         return
 
     experiments = experiment_set(args.expname)
