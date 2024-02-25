@@ -173,6 +173,30 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                 "robust_std_top_3",
                 "robust_std_top_5",
             ]
+        case "category4-nsplits-5":
+            # This suite is running everything that had more
+            # than 50 trials after 4 hours of 10 fold cross-validation
+            n_splits = [3]
+            pipeline = "rf_classifier"
+            methods = [
+                "disabled",
+                "current_average_worse_than_best_worst_split",
+                "current_average_worse_than_mean_best",
+                "robust_std_top_3",
+                "robust_std_top_5",
+            ]
+        case "category4-nsplits-3":
+            # This suite is running everything that had more
+            # than 50 trials after 4 hours of 10 fold cross-validation
+            n_splits = [5]
+            pipeline = "rf_classifier"
+            methods = [
+                "disabled",
+                "current_average_worse_than_best_worst_split",
+                "current_average_worse_than_mean_best",
+                "robust_std_top_3",
+                "robust_std_top_5",
+            ]
         case "category5-nsplits-10":
             # We have to return specifically for this as we don't want a full product of
             # experiments. This is because the "smac_early_stop_with_fold_mean" makes no
