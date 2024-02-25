@@ -176,7 +176,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
         case "category4-nsplits-5":
             # This suite is running everything that had more
             # than 50 trials after 4 hours of 10 fold cross-validation
-            n_splits = [3]
+            n_splits = [5]
             pipeline = "rf_classifier"
             methods = [
                 "disabled",
@@ -188,7 +188,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
         case "category4-nsplits-3":
             # This suite is running everything that had more
             # than 50 trials after 4 hours of 10 fold cross-validation
-            n_splits = [5]
+            n_splits = [3]
             pipeline = "rf_classifier"
             methods = [
                 "disabled",
