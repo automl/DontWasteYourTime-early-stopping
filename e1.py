@@ -96,7 +96,7 @@ def exp_name_to_result_dir(exp_name: EXP_NAME) -> Path:
     match exp_name:
         case "time-analysis":
             return Path("results-time-analysis").resolve()
-        case "category3-nsplits-10" | "category3-nsplits-5" | "category3-nsplits-3":
+        case "category3-nsplits-20" | "category3-nsplits-10" | "category3-nsplits-5" | "category3-nsplits-3":
             return Path("results-category3").resolve()
         case "category4-nsplits-10" | "category4-nsplits-5" | "category4-nsplits-3":
             return Path("results-category4").resolve()
@@ -141,7 +141,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             suite = TASKS["amlb_classification_full"]
             methods = ["disabled"]
         case "category3-nsplits-20":
-            n_splits = [10]
+            n_splits = [20]
             methods = [
                 "disabled",
                 "current_average_worse_than_best_worst_split",
