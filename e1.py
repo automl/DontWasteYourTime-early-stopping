@@ -6,7 +6,6 @@ from itertools import chain, product
 from pathlib import Path
 from typing import TYPE_CHECKING, Counter, Literal, TypeAlias
 
-import matplotlib.pyplot as plt
 import pandas as pd
 from rich import print
 
@@ -335,7 +334,9 @@ def main():  # noqa: C901, PLR0915, PLR0912
         p.add_argument("--no-config", action="store_true")
 
     with cmds("plot") as p:
-        p.add_argument("--out", type=Path, required=True)
+        p.add_argument("--path", type=Path, default=Path("./plots"))
+        p.add_argument("--prefix", type=str, required=True)
+        p.add_argument("--filetype", choices=["pdf", "png"], required=True, type=str)
         p.add_argument("--metric", type=str, choices=METRICS.keys(), required=True)
         p.add_argument("--n-splits", type=int, required=True)
         p.add_argument("--time-limit", type=int, required=True)
@@ -364,12 +365,15 @@ def main():  # noqa: C901, PLR0915, PLR0912
 
     args = parser.parse_args()
     if args.command == "plot":
+        import matplotlib.pyplot as plt
+
+        args.path.mkdir(parents=True, exist_ok=True)
+        filepath = args.path / f"{args.prefix}-{args.kind}.{args.filetype}"
+
         metric = METRICS[args.metric]
-        n_splits = args.n_splits
         time_limit = args.time_limit
-        cols = cols_needed_for_plotting(metric, n_splits)
+        cols = cols_needed_for_plotting(metric, args.n_splits)
         _df = pd.read_parquet(args.input, columns=cols)
-        _df = _df[_df["setting:n_splits"] == n_splits]
         N_DATASETS = _df["setting:task"].nunique()
         match args.kind:
             case "incumbent-aggregated":
@@ -423,11 +427,12 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     x="reported_at",
                     x_start="created_at",
                     x_label="Time (s)",
-                    title="TODO",
+                    title="Speedup",
                 )
             case _:
                 print(f"Unknown kind {args.kind}")
-        plt.savefig(args.out, bbox_inches="tight")
+
+        plt.savefig(filepath, bbox_inches="tight")
         return
 
     experiments = experiment_set(args.expname)
