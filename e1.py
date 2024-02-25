@@ -334,7 +334,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
         p.add_argument("--no-config", action="store_true")
 
     with cmds("plot") as p:
-        p.add_argument("--path", type=Path, default=Path("./plots"))
+        p.add_argument("--outpath", type=Path, default=Path("./plots"))
         p.add_argument("--prefix", type=str, required=True)
         p.add_argument("--filetype", choices=["pdf", "png"], required=True, type=str)
         p.add_argument("--metric", type=str, choices=METRICS.keys(), required=True)
@@ -501,7 +501,9 @@ def main():  # noqa: C901, PLR0915, PLR0912
             for status, exps in exps_by_status.items():
                 print(f"{status}: {len(exps)}")
 
-            to_submit = list(chain.from_iterable(exps_by_status[s] for s in args.overwrite_by))
+            to_submit = list(
+                chain.from_iterable(exps_by_status[s] for s in args.overwrite_by)
+            )
             if not any(to_submit):
                 print(f"Nothing to run from {len(experiments)} experiments.")
                 sys.exit(0)
