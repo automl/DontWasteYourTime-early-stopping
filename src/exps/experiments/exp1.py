@@ -16,6 +16,7 @@ from amltk.sklearn.voting import voting_with_preffited_estimators
 from amltk.store import PathBucket
 from sklearn.ensemble import VotingClassifier, VotingRegressor
 from sklearn.metrics._scorer import _MultimetricScorer
+from sklearn.model_selection import RepeatedStratifiedKFold
 
 from exps.methods import METHODS
 from exps.metrics import METRICS
@@ -217,10 +218,17 @@ def run_it(run: E1) -> None:
     metric = METRICS[run.metric]
     cv_early_stopping_method = METHODS[run.cv_early_stop_strategy]
 
+    # This is a bit of hack but we don't do 20 CV, we do it
+    # as 2 cross 10
+    if run.n_splits == 20:  # noqa: PLR2004
+        splitter = RepeatedStratifiedKFold(n_splits=2, n_repeats=10)
+    else:
+        splitter = "cv"
+
     evaluator = CVEvaluation(
         X,
         y,
-        splitter="cv",
+        splitter=splitter,  # type: ignore
         n_splits=run.n_splits,
         random_state=run.experiment_seed + run.fold,
         working_dir=run.unique_path / "evaluator",
