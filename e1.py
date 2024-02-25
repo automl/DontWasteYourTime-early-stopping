@@ -49,7 +49,8 @@ EXP_CHOICES = [
 
 
 def cols_needed_for_plotting(
-    metric: Metric | str, n_splits: int | None = None
+    metric: Metric | str,
+    n_splits: int | None = None,
 ) -> list[str]:
     if isinstance(metric, str):
         metric = METRICS[metric]
