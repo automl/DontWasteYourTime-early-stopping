@@ -112,14 +112,14 @@ class SMACOptimizerWithIncreasesRetries(SMACOptimizer):
         )
 
 
-class SMACReportEarlyStopAsFailed(SMACOptimizer):
+class SMACReportEarlyStopAsFailed(SMACOptimizerWithIncreasesRetries):
     @override
     def tell(self, report: Trial.Report[SMACTrialInfo]) -> None:
         """We don't really need to overwrite anything as this is default behaviour."""
         return super().tell(report)
 
 
-class SMACReportEarlyStopWithFoldMean(SMACOptimizer):
+class SMACReportEarlyStopWithFoldMean(SMACOptimizerWithIncreasesRetries):
     @override
     def tell(self, report: Trial.Report[SMACTrialInfo]) -> None:
         """If a trial was report as failed, we convert it to a success by taking
