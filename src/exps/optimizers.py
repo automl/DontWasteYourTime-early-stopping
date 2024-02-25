@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Concatenate, overload
+from typing import TYPE_CHECKING, Any, Concatenate, Literal, overload
 from typing_extensions import Self, override
 
 import amltk.randomness
@@ -11,12 +12,104 @@ from amltk.exceptions import CVEarlyStoppedError
 from amltk.optimization import Metric, Trial
 from amltk.optimization.optimizer import Optimizer
 from amltk.optimization.optimizers.smac import SMACOptimizer, SMACTrialInfo
+from amltk.pipeline import Node
+from amltk.randomness import as_int
 from amltk.store import PathBucket
+from smac.facade import AbstractFacade, HyperparameterOptimizationFacade
+from smac.scenario import Scenario
 
 if TYPE_CHECKING:
-    from amltk.pipeline import Node
-    from amltk.types import Seed
-    from ConfigSpace import Configuration
+    from amltk.types import FidT, Seed
+    from ConfigSpace import Configuration, ConfigurationSpace
+
+
+class SMACOptimizerWithIncreasesRetries(SMACOptimizer):
+    @override
+    @classmethod
+    def create(
+        cls,
+        *,
+        space: ConfigurationSpace | Node,
+        metrics: Metric | Sequence[Metric],
+        bucket: PathBucket | str | Path | None = None,
+        time_profile: str | None = None,
+        deterministic: bool = True,
+        seed: Seed | None = None,
+        fidelities: Mapping[str, FidT] | None = None,
+        continue_from_last_run: bool = False,
+        logging_level: int | Path | Literal[False] | None = False,
+    ) -> Self:
+        """Overwrites the default implementation of create to also increase
+        the number of retries with the ConfigSelector as on small datasets, the
+        default number of retries is not enough to find a unique configurations,
+        causing the whole process to fail.
+        """
+        seed = as_int(seed)
+        match bucket:
+            case None:
+                bucket = PathBucket(
+                    f"{cls.__name__}-{datetime.now().isoformat()}",
+                )
+            case str() | Path():
+                bucket = PathBucket(bucket)
+            case bucket:
+                bucket = bucket  # noqa: PLW0127
+
+        # NOTE SMAC always minimizes! Hence we make it a minimization problem
+        metric_names: str | list[str]
+        if isinstance(metrics, Sequence):
+            metric_names = [metric.name for metric in metrics]
+        else:
+            metric_names = metrics.name
+
+        if isinstance(space, Node):
+            space = space.search_space(parser=cls.preferred_parser())
+
+        facade_cls: type[AbstractFacade]
+        if fidelities:
+            raise NotImplementedError("Fidelities are not used for these experiments")
+        scenario = Scenario(
+            configspace=space,
+            seed=seed,
+            output_directory=bucket.path / "smac3_output",
+            deterministic=deterministic,
+            objectives=metric_names,
+            crash_cost=list(cls.crash_costs(metrics).values()),
+        )
+        facade_cls = HyperparameterOptimizationFacade
+
+        # NOTE: This is the important part.
+        # As sometimes the optimizer raises StopIteration, it seems that a good
+        # strategy is to increase the number of retries. I suspect this is because
+        # the acquisition function fails to find new configurations within the default
+        # of 16 retries due to hitting an optimum. Given we have a non-finite search
+        # space, this is kind of surprising but it's hard to debug with SMAC otherwise.
+        # If this doesn't solve the 74/3200 failed runs, then the solution will be to
+        # consider SMAC as having converged at this point and to not treat the
+        # `StopIteration` as an error and instead gracefully halt at this point.
+        # We will try this retry strategy first
+        config_selector = HyperparameterOptimizationFacade.get_config_selector(
+            scenario,
+            retries=128,  # Default is 16
+        )
+
+        facade = facade_cls(
+            scenario=scenario,
+            target_function="dummy",  # NOTE: https://github.com/automl/SMAC3/issues/946
+            overwrite=not continue_from_last_run,
+            logging_level=logging_level,
+            config_selector=config_selector,
+            multi_objective_algorithm=facade_cls.get_multi_objective_algorithm(
+                scenario=scenario,
+            ),
+        )
+        return cls(
+            facade=facade,
+            fidelities=fidelities,
+            bucket=bucket,
+            metrics=metrics,
+            time_profile=time_profile,
+        )
 
 
 class SMACReportEarlyStopAsFailed(SMACOptimizer):
