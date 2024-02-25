@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 EXP_NAME: TypeAlias = Literal[
     "debug",
     "time-analysis",
+    "category3-nsplits-20",
     "category3-nsplits-10",
     "category3-nsplits-5",
     "category3-nsplits-3",
@@ -38,6 +39,7 @@ EXP_NAME: TypeAlias = Literal[
 EXP_CHOICES = [
     "debug",
     "time-analysis",
+    "category3-nsplits-20",  # MLP pipeline (2 repeat, 10 fold)
     "category3-nsplits-10",  # MLP pipeline
     "category3-nsplits-5",  # MLP pipeline
     "category3-nsplits-3",  # MLP pipeline
@@ -132,6 +134,15 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             time_seconds = 4 * 60 * 60
             suite = TASKS["amlb_classification_full"]
             methods = ["disabled"]
+        case "category3-nsplits-20":
+            n_splits = [10]
+            methods = [
+                "disabled",
+                "current_average_worse_than_best_worst_split",
+                "current_average_worse_than_mean_best",
+                "robust_std_top_3",
+                "robust_std_top_5",
+            ]
         case "category3-nsplits-10":
             n_splits = [10]
             methods = [
