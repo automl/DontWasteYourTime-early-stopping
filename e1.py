@@ -1,9 +1,10 @@
 from __future__ import annotations
+from collections import defaultdict
 
 import sys
 from itertools import chain, product
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, TypeAlias
+from typing import TYPE_CHECKING, Counter, Literal, TypeAlias
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -303,13 +304,23 @@ def main():  # noqa: C901, PLR0915, PLR0912
 
     with cmds("run") as p:
         p.add_argument("--expname", choices=EXP_CHOICES, type=str, required=True)
-        p.add_argument("--overwrite-all", action="store_true")
-        p.add_argument("--overwrite-failed-only", action="store_true")
+        p.add_argument(
+            "--overwrite-by",
+            choices=["failed", "running", "pending", "success", "submitted"],
+            nargs="*",
+            default=["pending"],
+        )
 
     with cmds("submit") as p:
         p.add_argument("--expname", choices=EXP_CHOICES, type=str, required=True)
+        p.add_argument("--dry", action="store_true")
+        p.add_argument(
+            "--overwrite-by",
+            choices=["failed", "running", "pending", "success", "submitted"],
+            nargs="*",
+            default=["pending"],
+        )
         p.add_argument("--overwrite-all", action="store_true")
-        p.add_argument("--overwrite-failed-only", action="store_true")
 
     with cmds("status") as p:
         p.add_argument("--expname", choices=EXP_CHOICES, type=str, required=True)
@@ -441,32 +452,6 @@ def main():  # noqa: C901, PLR0915, PLR0912
             print(status)
             if args.out:
                 shrink_dataframe(status).to_parquet(args.out)
-        case "run":
-            if args.overwrite_all:
-                exps = experiments
-                for exp in exps:
-                    exp.reset()
-                array = E1.as_array(experiments)
-            elif args.overwrite_failed_only:
-                exps = [e for e in experiments if e.status() == "failed"]
-                if not any(exps):
-                    print(f"No failed experiments from {len(experiments)} to reset.")
-                    sys.exit(0)
-
-                for exp in exps:
-                    if exp.status() == "failed":
-                        exp.reset()
-                array = E1.as_array(exps)
-            else:
-                pending = [exp for exp in experiments if exp.status() == "pending"]
-                if len(pending) == 0:
-                    print(f"Nothing to run from {len(experiments)} experiments.")
-                    sys.exit(0)
-
-                array = E1.as_array(pending)
-
-            for exp in array:
-                exp.run()
         case "collect":
             array = E1.as_array(experiments)
             if args.fail_early:
@@ -503,47 +488,52 @@ def main():  # noqa: C901, PLR0915, PLR0912
             print(f"Writing parquet to {args.out}")
             _df.to_parquet(args.out)
 
-        case "submit":
-            if args.overwrite_all:
-                exps = experiments
-                for exp in exps:
-                    exp.reset()
-                array = E1.as_array(experiments)
-            elif args.overwrite_failed_only:
-                exps = [e for e in experiments if e.status() == "failed"]
-                if not any(exps):
-                    print(f"No failed experiments from {len(experiments)} to reset.")
-                    sys.exit(0)
+        case "submit" | "run":
+            exps_by_status = defaultdict(list)
+            for e in experiments:
+                exps_by_status[e.status()].append(e)
 
-                for exp in exps:
-                    if exp.status() == "failed":
-                        exp.reset()
-                array = E1.as_array(exps)
-            else:
-                pending = [exp for exp in experiments if exp.status() == "pending"]
-                array = E1.as_array(pending)
-                if len(pending) == 0:
-                    print(f"Nothing to run from {len(experiments)} experiments.")
-                    sys.exit(0)
+            for status, exps in exps_by_status.items():
+                print(f"{status}: {len(exps)}")
 
-            first = experiments[0]
-            array.submit(
-                name=args.expname,
-                slurm_headers={
-                    "partition": "bosch_cpu-cascadelake",
-                    "mem": f"{first.memory_gb}G",
-                    "time": seconds_to_slurm_time(
-                        int(5 * 60 + first.time_seconds * 1.5),
-                    ),
-                    "cpus-per-task": first.n_cpus,
-                    "output": str(log_dir / "%j-%a.out"),
-                    "error": str(log_dir / "%j-%a.err"),
-                },
-                python="/work/dlclarge2/bergmane-pipeline-exps/exps/.eddie-venv/bin/python",
-                script_dir=result_dir / "slurm-scripts",
-                sbatch=["sbatch", "--bosch"],
-                limit=1,
-            )
+            to_submit = list(chain.from_iterable(exps_by_status[s] for s in args.overwrite_by))
+            if not any(to_submit):
+                print(f"Nothing to run from {len(experiments)} experiments.")
+                sys.exit(0)
+
+            if args.dry:
+                print(f"Would reset: {args.overwrite_by}")
+                sys.exit(0)
+
+            for exp in to_submit:
+                exp.reset()
+
+            match args.command:
+                case "submit":
+                    array = E1.as_array(to_submit)
+                    first = array[0]
+                    array.submit(
+                        name=args.expname,
+                        slurm_headers={
+                            "partition": "bosch_cpu-cascadelake",
+                            "mem": f"{first.memory_gb}G",
+                            "time": seconds_to_slurm_time(
+                                int(5 * 60 + first.time_seconds * 1.5),
+                            ),
+                            "cpus-per-task": first.n_cpus,
+                            "output": str(log_dir / "%j-%a.out"),
+                            "error": str(log_dir / "%j-%a.err"),
+                        },
+                        python="/work/dlclarge2/bergmane-pipeline-exps/exps/.eddie-venv/bin/python",
+                        script_dir=result_dir / "slurm-scripts",
+                        sbatch=["sbatch", "--bosch"],
+                        limit=1,
+                    )
+                case "run":
+                    for exp in to_submit:
+                        exp.run()
+                case _:
+                    raise RuntimeError("Something wasn't accounted for")
         case _:
             print("Unknown command")
             parser.print_help()

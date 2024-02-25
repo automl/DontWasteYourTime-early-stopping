@@ -125,16 +125,11 @@ class SMACReportEarlyStopWithFoldMean(SMACOptimizerWithIncreasesRetries):
         """If a trial was report as failed, we convert it to a success by taking
         the mean of the fold means and using that as the performance to report to SMAC.
         """
-        print(report)
-        print(report.status)
-        print(report.exception)
-        print(type(report.exception))
         match report.status:
             # In the case of success or crash, nothing to change
             case Trial.Status.SUCCESS | Trial.Status.CRASHED | Trial.Status.UNKNOWN:
                 return super().tell(report)
             case Trial.Status.FAIL if isinstance(report.exception, CVEarlyStoppedError):
-                print("IN HERE")
                 # Howeever when a trial fails due to early stopping, we create a
                 # success report instead, using the mean of fold scores as the value.
                 trial = report.trial
