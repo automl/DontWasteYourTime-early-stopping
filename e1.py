@@ -319,6 +319,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
             choices=["failed", "running", "pending", "success", "submitted"],
             nargs="*",
             default=["pending"],
+            type=str,
         )
 
     with cmds("submit") as p:
@@ -329,6 +330,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
             choices=["failed", "running", "pending", "success", "submitted"],
             nargs="*",
             default=["pending"],
+            type=str,
         )
         p.add_argument("--overwrite-all", action="store_true")
 
@@ -351,6 +353,13 @@ def main():  # noqa: C901, PLR0915, PLR0912
         p.add_argument("--n-splits", type=int, required=True)
         p.add_argument("--time-limit", type=int, required=True)
         p.add_argument(
+            "--method",
+            type=str,
+            choices=["mlp", "rf", "optimizer"],
+            required=True,
+        )
+        p.add_argument("--merge-opt-into-method", action="store_true")
+        p.add_argument(
             "--kind",
             type=str,
             choices=[
@@ -359,14 +368,6 @@ def main():  # noqa: C901, PLR0915, PLR0912
                 "incumbent-aggregated",
             ],
         )
-        p.add_argument(
-            "input",
-            type=Path,
-            help="The path to the `collect`'ed experiment name",
-        )
-
-    with cmds("plot-normalized-baseline") as p:
-        p.add_argument("--out", type=Path, required=True)
         p.add_argument(
             "input",
             type=Path,
@@ -384,35 +385,52 @@ def main():  # noqa: C901, PLR0915, PLR0912
         cols = cols_needed_for_plotting(metric, args.n_splits)
         _df = pd.read_parquet(args.input, columns=cols)
         N_DATASETS = _df["setting:task"].nunique()
+
+        if args.merge_opt_into_method:
+            _df["setting:opt-method"] = _df["setting:optimizer"].str.cat(
+                _df["setting:cv_early_stop_strategy"],
+                sep="-",
+            )
+            method_col = "setting:opt-method"
+            baseline = "smac_early_stop_as_failed-disabled"  # Used for speedups
+        else:
+            method_col = "setting:cv_early_stop_strategy"
+            baseline = "disabled"  # Used for speedups
+
         match args.kind:
             case "incumbent-aggregated":
-                title = f"Normalized Cost Over {N_DATASETS} Datasets"
+                if args.method in ("mlp", "rf"):
+                    title = f"Normalized Cost of {args.method.upper()} with {args.n_splits} CV splits, {N_DATASETS} Datasets"  # noqa: E501
+                else:
+                    title = f"Normalized Cost of Optimized MLP with {args.n_splits} CV splits, {N_DATASETS} Datasets"
                 incumbent_traces_aggregated(
                     _df,
                     y=f"metric:{metric}",
                     test_y=f"summary:test_bagged_{metric.name}",
-                    method="setting:cv_early_stop_strategy",
+                    method=method_col,
                     fold="setting:fold",
                     dataset="setting:task",
                     x="reported_at",
                     x_start="created_at",
                     x_label="Time (s)",
-                    y_label="1 - (normalized) ROC AUC [OVR]",
+                    y_label="1 - Normalized ROC AUC [OVR]",
                     title=title,
                     x_bounds=(0, time_limit),
-                    # y_bounds=(1e-1, 1),
                     minimize=metric.minimize,
                     invert=True,
                     log_y=True,
                     markevery=0.1,
                 )
             case "ranks-aggregated":
-                title = f"Rank Aggregation Over {N_DATASETS} Datasets"
+                if args.method in ("mlp", "rf"):
+                    title = f"Rank Aggregation of {args.method.upper()} with {args.n_splits} CV splits, {N_DATASETS} Datasets"  # noqa: E501
+                else:
+                    title = f"Rank Aggregation of Optimized MLP with {args.n_splits} CV splits, {N_DATASETS} Datasets"  # noqa: E501
                 ranking_plots_aggregated(
                     _df,
                     y=f"metric:{metric}",
                     test_y=f"summary:test_bagged_{metric.name}",
-                    method="setting:cv_early_stop_strategy",
+                    method=method_col,
                     fold="setting:fold",
                     dataset="setting:task",
                     x="reported_at",
@@ -425,18 +443,26 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     markevery=0.1,
                 )
             case "speedups":
-                speedup_plots(
+                if args.method in ("mlp", "rf"):
+                    title = f"Speedups for {args.method.upper()} with {args.n_splits} CV splits"  # noqa: E501
+                else:
+                    title = f"Speedups for Optimized MLP with {args.n_splits} CV splits"
+                table_full, table_summary, _ = speedup_plots(
                     _df,
                     y=f"metric:{metric}",
-                    baseline="disabled",
+                    baseline=baseline,
                     test_y=f"summary:test_bagged_{metric.name}",
-                    method="setting:cv_early_stop_strategy",
+                    method=method_col,
                     fold="setting:fold",
                     dataset="setting:task",
                     x="reported_at",
                     x_start="created_at",
                     x_label="Time (s)",
-                    title="Speedup",
+                    title=title,
+                )
+                table_full.to_latex(args.outpath / f"{args.prefix}-speedups-full.tex")
+                table_summary.to_latex(
+                    args.outpath / f"{args.prefix}-speedups-aggregated.tex",
                 )
             case _:
                 print(f"Unknown kind {args.kind}")

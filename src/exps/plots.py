@@ -1,4 +1,4 @@
-# ruff: noqa: E501, PD010, PD013
+# ruff: noqa: E501, PD010, PD013, PD901
 from __future__ import annotations
 
 import json
@@ -13,6 +13,7 @@ from matplotlib.lines import Line2D
 
 _colors = iter(plt.get_cmap("tab10").colors)  # type: ignore
 MARKER_SIZE = 10
+LEGEND_MAX_COLS = 5
 COLORS = {
     "disabled": next(_colors),
     "current_average_worse_than_mean_best": next(_colors),
@@ -21,6 +22,29 @@ COLORS = {
     "robust_std_top_5": next(_colors),
     "both": next(_colors),
 }
+COLORS.update(
+    {
+        "smac_early_stop_as_failed-disabled": COLORS["disabled"],
+        "smac_early_stop_as_failed-current_average_worse_than_mean_best": COLORS[
+            "current_average_worse_than_mean_best"
+        ],
+        "smac_early_stop_as_failed-current_average_worse_than_best_worst_split": COLORS[
+            "current_average_worse_than_best_worst_split"
+        ],
+        "smac_early_stop_as_failed-robust_std_top_3": COLORS["robust_std_top_3"],
+        "smac_early_stop_as_failed-robust_std_top_5": COLORS["robust_std_top_5"],
+        # --- #
+        "smac_early_stop_with_fold_mean-disabled": COLORS["disabled"],
+        "smac_early_stop_with_fold_mean-current_average_worse_than_mean_best": COLORS[
+            "current_average_worse_than_mean_best"
+        ],
+        "smac_early_stop_with_fold_mean-current_average_worse_than_best_worst_split": COLORS[
+            "current_average_worse_than_best_worst_split"
+        ],
+        "smac_early_stop_with_fold_mean-robust_std_top_3": COLORS["robust_std_top_3"],
+        "smac_early_stop_with_fold_mean-robust_std_top_5": COLORS["robust_std_top_5"],
+    },
+)
 # https://matplotlib.org/stable/gallery/lines_bars_and_markers/marker_reference.html#filled-markers
 MARKERS = {
     "disabled": "o",
@@ -29,17 +53,131 @@ MARKERS = {
     "robust_std_top_3": "X",
     "robust_std_top_5": "P",
     "both": "s",
+    # --- #
 }
+MARKERS.update(
+    {
+        "smac_early_stop_as_failed-disabled": MARKERS["disabled"],
+        "smac_early_stop_as_failed-current_average_worse_than_mean_best": MARKERS[
+            "current_average_worse_than_mean_best"
+        ],
+        "smac_early_stop_as_failed-current_average_worse_than_best_worst_split": MARKERS[
+            "current_average_worse_than_best_worst_split"
+        ],
+        "smac_early_stop_as_failed-robust_std_top_3": MARKERS["robust_std_top_3"],
+        "smac_early_stop_as_failed-robust_std_top_5": MARKERS["robust_std_top_5"],
+        # --- #
+        "smac_early_stop_with_fold_mean-disabled": MARKERS["disabled"],
+        "smac_early_stop_with_fold_mean-current_average_worse_than_mean_best": MARKERS[
+            "current_average_worse_than_mean_best"
+        ],
+        "smac_early_stop_with_fold_mean-current_average_worse_than_best_worst_split": MARKERS[
+            "current_average_worse_than_best_worst_split"
+        ],
+        "smac_early_stop_with_fold_mean-robust_std_top_3": MARKERS["robust_std_top_3"],
+        "smac_early_stop_with_fold_mean-robust_std_top_5": MARKERS["robust_std_top_5"],
+    },
+)
+LINE_STYLES = {
+    "smac_early_stop_as_failed-disabled": "solid",
+    "smac_early_stop_as_failed-current_average_worse_than_mean_best": "solid",
+    "smac_early_stop_as_failed-current_average_worse_than_best_worst_split": "solid",
+    "smac_early_stop_as_failed-robust_std_top_3": "solid",
+    "smac_early_stop_as_failed-robust_std_top_5": "solid",
+    # --- #
+    "smac_early_stop_with_fold_mean-disabled": "dashed",
+    "smac_early_stop_with_fold_mean-current_average_worse_than_mean_best": "dashed",
+    "smac_early_stop_with_fold_mean-current_average_worse_than_best_worst_split": "dashed",
+    "smac_early_stop_with_fold_mean-robust_std_top_3": "dashed",
+    "smac_early_stop_with_fold_mean-robust_std_top_5": "dashed",
+}
+
 X_TICKS = {
     (0, 3600): [0, 600, 1200, 1800, 2400, 3000, 3600],
 }
 RENAMES: dict[str, str] = {
-    "disabled": "no-cv-es",
-    "current_average_worse_than_mean_best": "fold-worse-best-mean",
-    "current_average_worse_than_best_worst_split": "fold-worse-best-worst",
-    "robust_std_top_3": "robust-3",
-    "robust_std_top_5": "robust-5",
+    "disabled": "No Early Stopping",
+    "current_average_worse_than_mean_best": "Mean Of Best",
+    "current_average_worse_than_best_worst_split": "Worst Fold of Best",
+    "robust_std_top_3": "Robust 3",
+    "robust_std_top_5": "Robust 5",
+    # --- #
 }
+RENAMES.update(
+    {
+        "smac_early_stop_as_failed-disabled": RENAMES["disabled"] + " (failed)",
+        "smac_early_stop_as_failed-current_average_worse_than_mean_best": RENAMES[
+            "current_average_worse_than_mean_best"
+        ]
+        + " (failed)",
+        "smac_early_stop_as_failed-current_average_worse_than_best_worst_split": RENAMES[
+            "current_average_worse_than_best_worst_split"
+        ]
+        + " (failed)",
+        "smac_early_stop_as_failed-robust_std_top_3": RENAMES["robust_std_top_3"]
+        + " (failed)",
+        "smac_early_stop_as_failed-robust_std_top_5": RENAMES["robust_std_top_5"]
+        + " (failed)",
+        # --- #
+        "smac_early_stop_with_fold_mean-disabled": RENAMES["disabled"] + " (mean)",
+        "smac_early_stop_with_fold_mean-current_average_worse_than_mean_best": RENAMES[
+            "current_average_worse_than_mean_best"
+        ]
+        + " (mean)",
+        "smac_early_stop_with_fold_mean-current_average_worse_than_best_worst_split": RENAMES[
+            "current_average_worse_than_best_worst_split"
+        ]
+        + " (mean)",
+        "smac_early_stop_with_fold_mean-robust_std_top_3": RENAMES["robust_std_top_3"]
+        + " (mean)",
+        "smac_early_stop_with_fold_mean-robust_std_top_5": RENAMES["robust_std_top_5"]
+        + " (mean)",
+    },
+)
+
+
+def markup_speedup_summary_table(
+    df: pd.DataFrame,
+    *,
+    bigger_is_better: bool,
+    n_datasets: int,
+) -> pd.DataFrame:
+    df.index.name = "Method"
+    df.index.map(RENAMES.get)
+    df = df.sort_index()
+
+    # Mean \\pm Std with bolding of highest speedup
+    mean_std = df["mean"].round(0).astype(str) + "\\pm" + df["std"].round(0).astype(str)
+    idx = df["mean"].idxmax() if bigger_is_better else df["mean"].idxmin()
+    mean_std.loc[idx] = "\\textbf{" + mean_std.loc[idx] + "}"
+    mean_std = "$" + mean_std + "$"
+    mean_std.name = "Average Speedup \\%"
+
+    # Count failed with highlighting of least failed
+    count_failed = df["Datasets Failed"].astype(int).astype(str)
+    idx = count_failed.idxmin()
+    count_failed.loc[idx] = "\\textbf{" + count_failed.loc[idx] + "}"
+
+    count_failed = "$" + count_failed + f" /{n_datasets}$"
+    return pd.concat([mean_std, count_failed], axis=1)
+
+
+def markup_speedup_table_full(df: pd.DataFrame) -> pd.DataFrame:
+    df.index.name = "Dataset (OpenML Task ID)"
+    df = df.rename(columns=RENAMES)
+    df = df.sort_index()
+
+    # Sort the columns by method names
+    df = df[sorted(df.columns)]
+
+    # Mean \\pm Std with bolding of highest speedup
+    df.columns.name = "Method"
+
+    # Convert all to percentage
+    df = df.round(0).astype(str) + r"\%"
+
+    # Replace NaN with r"\textbf{---}"
+    return df.where(df != r"nan\%", r"\textbf{---}")
 
 
 def _dataset_stats(path: Path | str | None = None) -> pd.DataFrame:
@@ -175,7 +313,9 @@ def ranking_plots_aggregated(  # noqa: PLR0913
 
     legend_lines = []
 
-    for method_name, _df in ranks_per_dataset.groupby(method, observed=True):
+    groups = ranks_per_dataset.groupby(method, observed=True)
+    groups = sorted(groups, key=lambda x: x[0])
+    for method_name, _df in groups:
         means = _df.mean(axis=1)
         sems = _df.sem(axis=1)
         _color = COLORS[method_name]  # type: ignore
@@ -192,7 +332,7 @@ def ranking_plots_aggregated(  # noqa: PLR0913
                 [0],
                 [0],
                 label=RENAMES.get(method_name, method_name),  # type: ignore
-                linestyle="solid",
+                linestyle=LINE_STYLES.get(method_name, "solid"),  # type: ignore
                 linewidth=3,
                 **_style,
             ),
@@ -210,7 +350,7 @@ def ranking_plots_aggregated(  # noqa: PLR0913
                 drawstyle="steps-post",
                 label=f"{label_name}",
                 ax=_ax,
-                linestyle="solid",
+                linestyle=LINE_STYLES.get(method_name, "solid"),  # type: ignore
                 markevery=markevery,
                 linewidth=3,
                 **_style,
@@ -246,7 +386,7 @@ def ranking_plots_aggregated(  # noqa: PLR0913
         handles=legend_lines,
         bbox_to_anchor=(0.5, 0),
         fontsize="xx-large",
-        ncols=len(legend_lines),
+        ncols=LEGEND_MAX_COLS,
     )
     fig.tight_layout()
     return fig, axes
@@ -319,7 +459,9 @@ def incumbent_traces_aggregated(  # noqa: PLR0913, C901
 
     legend_lines = []
 
-    for method_name, _df in inc_traces_per_dataset.groupby(method, observed=True):
+    groups = inc_traces_per_dataset.groupby(method, observed=True)
+    groups = sorted(groups, key=lambda x: x[0])
+    for method_name, _df in groups:
         # We dropna across the dataframe so that when we take mean/std, it's only
         # once we have a datapoint for each dataset (~40s)
         means = _df.mean(axis=1)
@@ -338,7 +480,7 @@ def incumbent_traces_aggregated(  # noqa: PLR0913, C901
                 [0],
                 [0],
                 label=RENAMES.get(method_name, method_name),
-                linestyle="solid",
+                linestyle=LINE_STYLES.get(method_name, "solid"),  # type: ignore
                 linewidth=3,
                 **_style,
             ),
@@ -356,7 +498,7 @@ def incumbent_traces_aggregated(  # noqa: PLR0913, C901
                 drawstyle="steps-post",
                 label=f"{label_name}",
                 ax=_ax,
-                linestyle="solid",
+                linestyle=LINE_STYLES.get(method_name, "solid"),  # type: ignore
                 markevery=markevery,
                 linewidth=3,
                 **_style,
@@ -395,7 +537,7 @@ def incumbent_traces_aggregated(  # noqa: PLR0913, C901
 
         _ax.set_xlabel(x_label if x_label is not None else x, fontsize="x-large")
         _ax.set_ylabel(y_label if y_label is not None else y, fontsize="x-large")
-        _ax.set_title({_y_set}, fontsize="x-large")
+        _ax.set_title(_y_set, fontsize="x-large")
 
     fig.suptitle(title, fontsize="xx-large")
     fig.legend(
@@ -403,7 +545,7 @@ def incumbent_traces_aggregated(  # noqa: PLR0913, C901
         handles=legend_lines,
         bbox_to_anchor=(0.5, 0),
         fontsize="xx-large",
-        ncols=len(legend_lines),
+        ncols=LEGEND_MAX_COLS,
     )
     fig.tight_layout()
     return fig, axes
@@ -425,7 +567,7 @@ def speedup_plots(  # noqa: PLR0913
     x_label: str | None = None,
     x_bounds: tuple[int, int] = (0, 3600),
     minimize: bool = False,
-) -> plt.Axes:
+) -> tuple[pd.DataFrame, pd.DataFrame, plt.Axes]:
     def incumbent_trace(_x: pd.DataFrame) -> pd.Series:
         return _inc_trace(
             _x,
@@ -569,10 +711,10 @@ def speedup_plots(  # noqa: PLR0913
     def count_performed_worse(x: pd.Series) -> int:
         return x.isna().sum()
 
-    # TODO: Need to export this to a table somewhere
     _speedup_stats = speedups.agg(["mean", "std", count_performed_worse]).T
-    print("TODO: Write these somewhere")
-    print(_speedup_stats)
+    _speedup_stats = _speedup_stats.rename(index=RENAMES).rename(
+        columns={"count_performed_worse": "Datasets Failed"},
+    )
 
     # Didn't go with this pairwise plot because it didn't have any more information than a boxplot would
     # NOTABLY: baseline convergence time (color) and dataset size (cell count) showed no clear patterns in relation
@@ -630,8 +772,6 @@ def speedup_plots(  # noqa: PLR0913
         method,
         observed=True,
     ):
-        print(f"Method: {_method}")
-        print(_x)
         _color = COLORS[_method]  # type: ignore
         _marker = MARKERS[_method]  # type: ignore
         _style = {
@@ -643,7 +783,7 @@ def speedup_plots(  # noqa: PLR0913
         _ax.scatter(
             x=_x.loc[_method].loc[sort_order],
             y=ys,
-            label=_method,
+            label=RENAMES[_method],
             **_style,
         )
 
@@ -655,4 +795,11 @@ def speedup_plots(  # noqa: PLR0913
             method_time_to_beat_baseline.index.get_level_values(method).nunique() // 2
         ),
     )
-    return ax
+
+    _speedup_stats = markup_speedup_summary_table(
+        _speedup_stats,
+        bigger_is_better=True,  # Bigger speedup is better
+        n_datasets=df[dataset].nunique(),  # type: ignore
+    )
+    speedups = markup_speedup_table_full(speedups)
+    return speedups, _speedup_stats, ax
