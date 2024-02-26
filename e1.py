@@ -35,6 +35,8 @@ EXP_NAME: TypeAlias = Literal[
     "category4-nsplits-5",
     "category4-nsplits-3",
     "category5-nsplits-10",
+    "category5-nsplits-20",
+    "category6-nsplits-10",
 ]
 EXP_CHOICES = [
     "debug",
@@ -47,6 +49,8 @@ EXP_CHOICES = [
     "category4-nsplits-5",  # RF pipeline
     "category4-nsplits-3",  # RF pipeline
     "category5-nsplits-10",  # {Default SMAC, SMAC w/ early stop mean report} MLP
+    "category5-nsplits-20",  # {Default SMAC, SMAC w/ early stop mean report} MLP
+    "category6-nsplits-10",  # {Default SMAC, SMAC w/ early stop mean report} RF
 ]
 
 
@@ -96,8 +100,10 @@ def exp_name_to_result_dir(exp_name: EXP_NAME) -> Path:
             return Path("results-category3").resolve()
         case "category4-nsplits-10" | "category4-nsplits-5" | "category4-nsplits-3":
             return Path("results-category4").resolve()
-        case "category5-nsplits-10":
+        case "category5-nsplits-10" | "category5-nsplits-20":
             return Path("results-category5").resolve()
+        case "category6-nsplits-10":
+            return Path("results-category6").resolve()
         case "debug":
             return Path("results-debug").resolve()
         case _:
@@ -214,6 +220,119 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             # sense to run when early stopping is disabled, it will behave the same as
             # "smac_early_stop_as_failed" which is default SMAC
             n_splits = [10]
+            pipeline = "mlp_classifier"
+            opt_method_set_1 = product(
+                ["smac_early_stop_as_failed"],
+                [
+                    "disabled",
+                    "current_average_worse_than_best_worst_split",
+                    "current_average_worse_than_mean_best",
+                    "robust_std_top_3",
+                    "robust_std_top_5",
+                ],
+            )
+            opt_method_set_2 = product(
+                ["smac_early_stop_with_fold_mean"],
+                [
+                    # No "disabled" as it makes no sense to run with early stopping
+                    "current_average_worse_than_best_worst_split",
+                    "current_average_worse_than_mean_best",
+                    "robust_std_top_3",
+                    "robust_std_top_5",
+                ],
+            )
+            opt_methods = chain(opt_method_set_1, opt_method_set_2)
+            return [
+                E1(
+                    # Parameters defining experiments
+                    task=task,
+                    fold=fold,
+                    n_splits=n_splits,
+                    # Constants for now
+                    pipeline=pipeline,
+                    n_cpus=n_cpu,
+                    optimizer=optimizer,
+                    memory_gb=mem_per_cpu_gb * n_cpu,
+                    time_seconds=time_seconds,
+                    experiment_seed=experiment_fixed_seed,
+                    minimum_trials=1,  # Takes no effect...
+                    metric=metric,
+                    # Extra
+                    wait=False,
+                    root=result_dir,
+                    cv_early_stop_strategy=method,
+                    openml_cache_directory=(Path() / ".openml-cache").resolve(),
+                )
+                for task, fold, n_splits, (optimizer, method) in product(
+                    suite,
+                    folds,
+                    n_splits,
+                    opt_methods,
+                )
+            ]
+        case "category5-nsplits-20":
+            # We have to return specifically for this as we don't want a full product of
+            # experiments. This is because the "smac_early_stop_with_fold_mean" makes no
+            # sense to run when early stopping is disabled, it will behave the same as
+            # "smac_early_stop_as_failed" which is default SMAC
+            n_splits = [20]
+            pipeline = "mlp_classifier"
+            opt_method_set_1 = product(
+                ["smac_early_stop_as_failed"],
+                [
+                    "disabled",
+                    "current_average_worse_than_best_worst_split",
+                    "current_average_worse_than_mean_best",
+                    "robust_std_top_3",
+                    "robust_std_top_5",
+                ],
+            )
+            opt_method_set_2 = product(
+                ["smac_early_stop_with_fold_mean"],
+                [
+                    # No "disabled" as it makes no sense to run with early stopping
+                    "current_average_worse_than_best_worst_split",
+                    "current_average_worse_than_mean_best",
+                    "robust_std_top_3",
+                    "robust_std_top_5",
+                ],
+            )
+            opt_methods = chain(opt_method_set_1, opt_method_set_2)
+            return [
+                E1(
+                    # Parameters defining experiments
+                    task=task,
+                    fold=fold,
+                    n_splits=n_splits,
+                    # Constants for now
+                    pipeline=pipeline,
+                    n_cpus=n_cpu,
+                    optimizer=optimizer,
+                    memory_gb=mem_per_cpu_gb * n_cpu,
+                    time_seconds=time_seconds,
+                    experiment_seed=experiment_fixed_seed,
+                    minimum_trials=1,  # Takes no effect...
+                    metric=metric,
+                    # Extra
+                    wait=False,
+                    root=result_dir,
+                    cv_early_stop_strategy=method,
+                    openml_cache_directory=(Path() / ".openml-cache").resolve(),
+                )
+                for task, fold, n_splits, (optimizer, method) in product(
+                    suite,
+                    folds,
+                    n_splits,
+                    opt_methods,
+                )
+            ]
+        case "category6-nsplits-10":
+            # We have to return specifically for this as we don't want a full product of
+            # experiments. This is because the "smac_early_stop_with_fold_mean" makes no
+            # sense to run when early stopping is disabled, it will behave the same as
+            # "smac_early_stop_as_failed" which is default SMAC
+            n_splits = [10]
+            pipeline = "rf_classifier"
             opt_method_set_1 = product(
                 ["smac_early_stop_as_failed"],
                 [
