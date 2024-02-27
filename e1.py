@@ -10,9 +10,11 @@ import pandas as pd
 from rich import print
 
 from exps.experiments.exp1 import E1, PIPELINES
+from exps.methods import METHODS
 from exps.metrics import METRICS
 from exps.plots import (
     incumbent_traces_aggregated,
+    incumbent_traces_aggregated_2x3_no_test,
     ranking_plots_aggregated,
     speedup_plots,
 )
@@ -70,6 +72,7 @@ def cols_needed_for_plotting(
         "setting:optimizer",
         "setting:task",
         "setting:n_splits",
+        "setting:pipeline",
         "setting:cv_early_stop_strategy",
     ]
     METRIC_COLS = [
@@ -96,7 +99,12 @@ def exp_name_to_result_dir(exp_name: EXP_NAME) -> Path:
     match exp_name:
         case "time-analysis":
             return Path("results-time-analysis").resolve()
-        case "category3-nsplits-20" | "category3-nsplits-10" | "category3-nsplits-5" | "category3-nsplits-3":
+        case (
+            "category3-nsplits-20"
+            | "category3-nsplits-10"
+            | "category3-nsplits-5"
+            | "category3-nsplits-3"
+        ):
             return Path("results-category3").resolve()
         case "category4-nsplits-10" | "category4-nsplits-5" | "category4-nsplits-3":
             return Path("results-category4").resolve()
@@ -465,6 +473,34 @@ def main():  # noqa: C901, PLR0915, PLR0912
         p.add_argument("--out", type=Path, required=True)
         p.add_argument("--no-config", action="store_true")
 
+    with cmds("plot-2x3") as p:
+        p.add_argument("--outpath", type=Path, default=Path("./plots"))
+        p.add_argument("--prefix", type=str, required=True)
+        p.add_argument("--metric", type=str, choices=METRICS.keys(), required=True)
+        p.add_argument("--n-splits", nargs="+", type=int, required=True)
+        p.add_argument("--time-limit", type=int, required=True)
+        p.add_argument(
+            "--methods",
+            nargs="+",
+            type=str,
+            choices=list(METHODS.keys()),
+            default=list(METHODS),
+        )
+        p.add_argument(
+            "--model",
+            type=str,
+            choices=["mlp", "rf"],
+            nargs="+",
+            required=True,
+        )
+        p.add_argument("--merge-opt-into-method", action="store_true")
+        p.add_argument(
+            "input",
+            type=Path,
+            nargs="+",
+            help="The path to the `collect`'ed experiment name, one per `--n-split`",
+        )
+
     with cmds("plot") as p:
         p.add_argument("--outpath", type=Path, default=Path("./plots"))
         p.add_argument("--prefix", type=str, required=True)
@@ -472,9 +508,17 @@ def main():  # noqa: C901, PLR0915, PLR0912
         p.add_argument("--n-splits", type=int, required=True)
         p.add_argument("--time-limit", type=int, required=True)
         p.add_argument(
-            "--method",
+            "--methods",
+            nargs="+",
             type=str,
-            choices=["mlp", "rf", "optimizer"],
+            choices=list(METHODS.keys()),
+            default=list(METHODS),
+        )
+        p.add_argument(
+            "--model",
+            type=str,
+            choices=["mlp", "rf"],
+            nargs="+",
             required=True,
         )
         p.add_argument("--merge-opt-into-method", action="store_true")
@@ -494,6 +538,78 @@ def main():  # noqa: C901, PLR0915, PLR0912
         )
 
     args = parser.parse_args()
+    if args.command == "plot-2x3":
+        import matplotlib.pyplot as plt
+
+        args.outpath.mkdir(parents=True, exist_ok=True)
+
+        metric = METRICS[args.metric]
+        time_limit = args.time_limit
+        _dfs = {
+            f"{model.upper()}, {n_splits} CV": pd.read_parquet(
+                path,
+                columns=cols_needed_for_plotting(metric, n_splits),
+            )
+            for path, (model, n_splits) in zip(
+                args.input,
+                product(args.model, args.n_splits),
+                strict=True,
+            )
+        }
+
+        first = next(iter(_dfs.values()))
+        N_DATASETS = first["setting:task"].nunique()
+
+        # Quick sanity check...
+        for key, _df in _dfs.items():
+            model = "rf_classifier" if "RF" in key else "mlp_classifier"
+            n_splits = int(key.split(",")[1].split()[0])
+            assert _df["setting:task"].nunique() == N_DATASETS
+            assert (_df["setting:n_splits"] == n_splits).all()
+            assert list(_df["setting:pipeline"].unique()) == [model]
+
+        _dfs = {
+            n_splits: _df[_df["setting:cv_early_stop_strategy"].isin(args.methods)]
+            for n_splits, _df in _dfs.items()
+        }
+
+        if args.merge_opt_into_method:
+            for _, _df in _dfs.items():
+                _df["setting:opt-method"] = _df["setting:optimizer"].str.cat(
+                    _df["setting:cv_early_stop_strategy"],
+                    sep="-",
+                )
+            method_col = "setting:opt-method"
+            baseline = "smac_early_stop_as_failed-disabled"  # Used for speedups
+        else:
+            method_col = "setting:cv_early_stop_strategy"
+            baseline = "disabled"  # Used for speedups
+
+        incumbent_traces_aggregated_2x3_no_test(
+            _dfs,
+            y=f"metric:{metric}",
+            test_y=f"summary:test_bagged_{metric.name}",
+            method=method_col,
+            fold="setting:fold",
+            dataset="setting:task",
+            x="reported_at",
+            x_start="created_at",
+            x_label="Time (s)",
+            y_label="1 - Normalized ROC AUC [OVR]",
+            figsize_per_ax=(4, 3),
+            title=f"Incumbent Traces, {N_DATASETS} Datasets",
+            x_bounds=(0, time_limit),
+            minimize=metric.minimize,
+            invert=True,
+            log_y=True,
+            markevery=0.1,
+        )
+        for ext in ["pdf", "png"]:
+            filepath = args.outpath / f"{args.prefix}-inc-2x3.{ext}"
+            plt.savefig(filepath, bbox_inches="tight")
+
+        return
+
     if args.command == "plot":
         import matplotlib.pyplot as plt
 
@@ -505,6 +621,8 @@ def main():  # noqa: C901, PLR0915, PLR0912
         _df = pd.read_parquet(args.input, columns=cols)
         N_DATASETS = _df["setting:task"].nunique()
 
+        _df = _df[_df["setting:cv_early_stop_strategy"].isin(args.methods)]
+
         if args.merge_opt_into_method:
             _df["setting:opt-method"] = _df["setting:optimizer"].str.cat(
                 _df["setting:cv_early_stop_strategy"],
@@ -512,16 +630,15 @@ def main():  # noqa: C901, PLR0915, PLR0912
             )
             method_col = "setting:opt-method"
             baseline = "smac_early_stop_as_failed-disabled"  # Used for speedups
+            method_title = f"Optimized {args.model.upper()}"
         else:
             method_col = "setting:cv_early_stop_strategy"
             baseline = "disabled"  # Used for speedups
+            method_title = args.model.upper()
 
         match args.kind:
             case "incumbent-aggregated":
-                if args.method in ("mlp", "rf"):
-                    title = f"Normalized Cost of {args.method.upper()} with {args.n_splits} CV splits, {N_DATASETS} Datasets"  # noqa: E501
-                else:
-                    title = f"Normalized Cost of Optimized MLP with {args.n_splits} CV splits, {N_DATASETS} Datasets"
+                title = f"Normalized Cost of {method_title} with {args.n_splits} CV splits, {N_DATASETS} Datasets"  # noqa: E501
                 incumbent_traces_aggregated(
                     _df,
                     y=f"metric:{metric}",
@@ -541,10 +658,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     markevery=0.1,
                 )
             case "ranks-aggregated":
-                if args.method in ("mlp", "rf"):
-                    title = f"Rank Aggregation of {args.method.upper()} with {args.n_splits} CV splits, {N_DATASETS} Datasets"  # noqa: E501
-                else:
-                    title = f"Rank Aggregation of Optimized MLP with {args.n_splits} CV splits, {N_DATASETS} Datasets"  # noqa: E501
+                title = f"Rank Aggregation of {method_title} with {args.n_splits} CV splits, {N_DATASETS} Datasets"  # noqa: E501
                 ranking_plots_aggregated(
                     _df,
                     y=f"metric:{metric}",
@@ -562,11 +676,8 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     markevery=0.1,
                 )
             case "speedups":
-                if args.method in ("mlp", "rf"):
-                    title = f"Speedups for {args.method.upper()} with {args.n_splits} CV splits"  # noqa: E501
-                else:
-                    title = f"Speedups for Optimized MLP with {args.n_splits} CV splits"
-                table_full, table_summary, _ = speedup_plots(
+                title = f"Speedups for {method_title} with {args.n_splits} CV splits"
+                table_full, table_summary = speedup_plots(
                     _df,
                     y=f"metric:{metric}",
                     baseline=baseline,
@@ -577,9 +688,11 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     x="reported_at",
                     x_start="created_at",
                     x_label="Time (s)",
-                    title=title,
                 )
                 table_full.to_latex(args.outpath / f"{args.prefix}-speedups-full.tex")
+                table_summary.to_parquet(
+                    args.outpath / f"{args.prefix}-speedups-aggregated.parquet",
+                )
                 table_summary.to_latex(
                     args.outpath / f"{args.prefix}-speedups-aggregated.tex",
                 )

@@ -14,6 +14,11 @@ from matplotlib.lines import Line2D
 _colors = iter(plt.get_cmap("tab10").colors)  # type: ignore
 MARKER_SIZE = 10
 LEGEND_MAX_COLS = 5
+LEGEND_FONTSIZE = "xx-large"
+TICK_FONTSIZE = "large"
+AXIS_LABEL_FONTSIZE = "xx-large"
+FIG_TITLE_FONTSIZE = "xx-large"
+AXIS_TITLE_FONTSIZE = "x-large"
 COLORS = {
     "disabled": next(_colors),
     "current_average_worse_than_mean_best": next(_colors),
@@ -372,24 +377,209 @@ def ranking_plots_aggregated(  # noqa: PLR0913
 
             if x_bounds in X_TICKS:
                 _ax.set_xticks(X_TICKS[x_bounds])
-                _ax.set_xticklabels([str(x) for x in X_TICKS[x_bounds]])
+                _ax.set_xticklabels(
+                    [str(x) for x in X_TICKS[x_bounds]],
+                    fontsize=TICK_FONTSIZE,
+                )
 
         _ax.set_ylim(1, df[method].nunique())
 
-        _ax.set_xlabel(x_label if x_label is not None else x, fontsize="x-large")
-        _ax.set_ylabel(y_label if y_label is not None else y, fontsize="x-large")
-        _ax.set_title(_y_set, fontsize="x-large")
+        _ax.set_xlabel(
+            x_label if x_label is not None else x,
+            fontsize=AXIS_LABEL_FONTSIZE,
+        )
+        _ax.set_ylabel(
+            y_label if y_label is not None else y,
+            fontsize=AXIS_LABEL_FONTSIZE,
+        )
+        _ax.set_title(_y_set, fontsize=AXIS_TITLE_FONTSIZE)
 
-    fig.suptitle(title, fontsize="xx-large")
+    fig.suptitle(title, fontsize=FIG_TITLE_FONTSIZE)
     fig.legend(
         loc="upper center",
         handles=legend_lines,
         bbox_to_anchor=(0.5, 0),
-        fontsize="xx-large",
+        fontsize=LEGEND_FONTSIZE,
         ncols=LEGEND_MAX_COLS,
     )
     fig.tight_layout()
     return fig, axes
+
+
+def incumbent_traces_aggregated_2x3_no_test(  # noqa: PLR0913, C901
+    dfs: dict[str, pd.DataFrame],
+    y: str,
+    test_y: str,
+    x: str,
+    x_start: str,
+    fold: str,
+    method: str,
+    dataset: str,  # TODO: list
+    title: str,
+    *,
+    minimize: bool = False,
+    log_y: bool = False,
+    nrows: int = 2,
+    figsize_per_ax: tuple[int, int] = (6, 5),
+    x_bounds: tuple[int | float | None, int | float | None] | None = None,
+    y_bounds: tuple[int | float | None, int | float | None] | None = None,
+    x_label: str | None = None,
+    y_label: str | None = None,
+    invert: bool = False,
+    markevery: int | float | None = None,
+) -> None:
+    assert len(dfs) % nrows == 0, "Number of datasets must be divisible by nrows"
+    ncols = len(dfs) // nrows
+    fig, axs = plt.subplots(
+        nrows,
+        len(dfs) // nrows,
+        figsize=(ncols * figsize_per_ax[0], nrows * figsize_per_ax[1]),
+        sharex=True,
+        sharey=True,
+    )
+    legend_lines = []
+
+    for i, ((ax_title, df), ax) in enumerate(
+        zip(dfs.items(), axs.flatten(), strict=True),
+    ):
+
+        def incumbent_trace(_x: pd.DataFrame) -> pd.Series:
+            return _inc_trace(
+                _x,
+                x_start_col=x_start,
+                x_col=x,
+                y_col=y,
+                test_y_col=test_y,
+                minimize=minimize,
+            )
+
+        inc_traces_per_dataset = (
+            df.groupby([dataset, method, fold], observed=True)
+            .apply(incumbent_trace)
+            .rename_axis(index={None: "values"})
+            .swaplevel(fold, "values")  # type: ignore
+            .unstack(fold)
+            .groupby([dataset, method, "values"], observed=True)
+            .ffill()
+            .mean(axis=1)
+            .unstack(dataset)
+            .groupby([method, "values"], observed=True)
+            .ffill()
+            .dropna()  # We can only being aggregating once we have a value for each dataset
+            .unstack("values")
+            .transform(lambda x: (x - x.min()) / (x.max() - x.min()))
+            .transform(lambda x: 1 - x if invert else x)
+            .stack("values")
+            .swaplevel("time (s)", "values")
+            .sort_index()
+        )
+
+        def extend_to_x_bound(s: pd.Series) -> pd.Series:
+            if x_bounds is not None and s.index[-1] < x_bounds[1]:  # type: ignore
+                return pd.concat([s, pd.Series([s.iloc[-1]], index=[x_bounds[1]])])
+            return s
+
+        groups = inc_traces_per_dataset.groupby(method, observed=True)
+        groups = sorted(groups, key=lambda x: x[0])
+        for method_name, _df in groups:
+            # We dropna across the dataframe so that when we take mean/std, it's only
+            # once we have a datapoint for each dataset (~40s)
+            means = _df.mean(axis=1)
+            sems = _df.sem(axis=1)
+            _color = COLORS[method_name]
+            _marker = MARKERS[method_name]
+            _style = {
+                "marker": _marker,
+                "markersize": MARKER_SIZE,
+                "markerfacecolor": "white",
+                "markeredgecolor": _color,
+                "color": _color,
+            }
+
+            if i == 0:
+                legend_lines.append(
+                    Line2D(
+                        [0],
+                        [0],
+                        label=RENAMES.get(method_name, method_name),
+                        linestyle=LINE_STYLES.get(method_name, "solid"),  # type: ignore
+                        linewidth=3,
+                        **_style,
+                    ),
+                )
+            _means = means.loc[method_name, "val"]
+            _stds = sems.loc[method_name, "val"]
+
+            _means = extend_to_x_bound(_means)
+            _stds = extend_to_x_bound(_stds)
+
+            label_name = RENAMES.get(method_name, method_name)
+
+            _means.plot(  # type: ignore
+                drawstyle="steps-post",
+                label=f"{label_name}",
+                ax=ax,
+                linestyle=LINE_STYLES.get(method_name, "solid"),  # type: ignore
+                markevery=markevery,
+                linewidth=3,
+                **_style,
+            )
+            ax.fill_between(
+                _means.index,  # type: ignore
+                _means - _stds,
+                _means + _stds,
+                alpha=0.2,
+                color=_color,
+                edgecolor=_color,
+                linewidth=2,
+                step="post",
+            )
+
+        if x_bounds:
+            ax.set_xlim(*x_bounds)
+
+            if x_bounds in X_TICKS:
+                ax.set_xticks(X_TICKS[x_bounds])
+                ax.set_xticklabels(
+                    [str(x) for x in X_TICKS[x_bounds]],
+                    fontsize=TICK_FONTSIZE,
+                )
+
+        if y_bounds:
+            ax.set_ylim(*y_bounds)
+
+        if log_y:
+            ax.set_yscale("log")
+
+        # Define custom formatter function to format tick labels as decimals
+        def format_func(value: float, _: int):
+            return f"{value:.2f}"
+
+        # Apply the custom formatter to the y-axis
+        ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(format_func))
+        ax.tick_params(axis="y", which="both", labelsize=TICK_FONTSIZE)
+
+        # ax.set_xlabel(x_label if x_label is not None else x, fontsize=AXIS_LABEL_FONTSIZE)
+
+        ax.set_title(ax_title, fontsize=AXIS_TITLE_FONTSIZE)
+
+    fig.suptitle(title, fontsize=FIG_TITLE_FONTSIZE)
+    fig.supxlabel(
+        x_label if x_label is not None else x,
+        fontsize=AXIS_LABEL_FONTSIZE,
+    )
+    fig.supylabel(
+        y_label if y_label is not None else y,
+        fontsize=AXIS_LABEL_FONTSIZE,
+    )
+    fig.legend(
+        loc="upper center",
+        handles=legend_lines,
+        bbox_to_anchor=(0.5, 0),
+        fontsize=LEGEND_FONTSIZE,
+        ncols=LEGEND_MAX_COLS,
+    )
+    fig.tight_layout()
 
 
 def incumbent_traces_aggregated(  # noqa: PLR0913, C901
@@ -535,16 +725,22 @@ def incumbent_traces_aggregated(  # noqa: PLR0913, C901
         # Apply the custom formatter to the y-axis
         _ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(format_func))
 
-        _ax.set_xlabel(x_label if x_label is not None else x, fontsize="x-large")
-        _ax.set_ylabel(y_label if y_label is not None else y, fontsize="x-large")
-        _ax.set_title(_y_set, fontsize="x-large")
+        _ax.set_xlabel(
+            x_label if x_label is not None else x,
+            fontsize=AXIS_LABEL_FONTSIZE,
+        )
+        _ax.set_ylabel(
+            y_label if y_label is not None else y,
+            fontsize=AXIS_LABEL_FONTSIZE,
+        )
+        _ax.set_title(_y_set, fontsize=AXIS_TITLE_FONTSIZE)
 
-    fig.suptitle(title, fontsize="xx-large")
+    fig.suptitle(title, fontsize=FIG_TITLE_FONTSIZE)
     fig.legend(
         loc="upper center",
         handles=legend_lines,
         bbox_to_anchor=(0.5, 0),
-        fontsize="xx-large",
+        fontsize=LEGEND_FONTSIZE,
         ncols=LEGEND_MAX_COLS,
     )
     fig.tight_layout()
@@ -560,14 +756,12 @@ def speedup_plots(  # noqa: PLR0913
     fold: str,
     method: str,
     dataset: str,  # TODO: list
-    title: str,
     baseline: str,
     *,
-    ax: plt.Axes | None = None,
     x_label: str | None = None,
     x_bounds: tuple[int, int] = (0, 3600),
     minimize: bool = False,
-) -> tuple[pd.DataFrame, pd.DataFrame, plt.Axes]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     def incumbent_trace(_x: pd.DataFrame) -> pd.Series:
         return _inc_trace(
             _x,
@@ -716,85 +910,14 @@ def speedup_plots(  # noqa: PLR0913
         columns={"count_performed_worse": "Datasets Failed"},
     )
 
-    # Didn't go with this pairwise plot because it didn't have any more information than a boxplot would
-    # NOTABLY: baseline convergence time (color) and dataset size (cell count) showed no clear patterns in relation
-    # to speedups.
     """
-    In [697]: g = sns.PairGrid(s, hue="baseline_convergence_time", corner=True, vars=XS); g.map_diag(sns.histplot, hue=None, color=".3"); g.map_offdiag(sns.scatterplot, size=s["dataset_size"]); g.add_legend(adjust_subtitles=True)
-     ...: for ax in g.axes.flatten():
-     ...:     if ax is not None:
-     ...:         ax.set_ylim(*bs)
-     ...:         ax.set_xlim(*bs)
-     ...: plt.show()
+                          min          max
+    setting:task
+    359954        2296.842680  2548.263483
+            ...
+    168910         950.159503  1329.614514
+    359960         159.711339   257.199337
     """
-    if ax is None:
-        _, _ax = plt.subplots(1, 1, figsize=(10, 20))
-    else:
-        _ax = ax
-
-    # We sort datasets by the time it took for the baseline to reach the best score
-    sort_order = baseline_time_to_best.sort_values(ascending=False).index
-
-    ys = np.arange(len(sort_order)) + 1
-
-    _ax.set_xlim(*x_bounds)
-    _ax.hlines(
-        ys,
-        xmin=np.zeros(len(ys)),
-        xmax=baseline_time_to_best.loc[sort_order],
-        linestyle="dashed",
-        linewidth=2,
-    )
-    _ax.scatter(
-        x=baseline_time_to_best.loc[sort_order],
-        y=ys,
-        # https://stackoverflow.com/questions/14827650/pyplot-scatter-plot-marker-size#comment113131391_14827650
-        s=MARKER_SIZE**2,
-        marker="<",
-        c="white",
-        edgecolor="black",
-    )
-
-    minmaxes = (
-        method_time_to_beat_baseline.groupby(dataset)
-        .agg(["min", "max"])
-        .loc[sort_order]
-    )
-    _ax.hlines(
-        ys,
-        xmin=minmaxes["min"],
-        xmax=minmaxes["max"],
-        linestyle="solid",
-        linewidth=3,
-    )
-
-    for _method, _x in method_time_to_beat_baseline.groupby(
-        method,
-        observed=True,
-    ):
-        _color = COLORS[_method]  # type: ignore
-        _marker = MARKERS[_method]  # type: ignore
-        _style = {
-            "s": MARKER_SIZE**2,
-            "marker": _marker,
-            "color": "white",
-            "edgecolors": _color,
-        }
-        _ax.scatter(
-            x=_x.loc[_method].loc[sort_order],
-            y=ys,
-            label=RENAMES[_method],
-            **_style,
-        )
-
-    _ax.legend(
-        loc="upper center",
-        bbox_to_anchor=(0.5, 0),
-        fontsize="xx-large",
-        ncols=(
-            method_time_to_beat_baseline.index.get_level_values(method).nunique() // 2
-        ),
-    )
 
     _speedup_stats = markup_speedup_summary_table(
         _speedup_stats,
@@ -802,4 +925,138 @@ def speedup_plots(  # noqa: PLR0913
         n_datasets=df[dataset].nunique(),  # type: ignore
     )
     speedups = markup_speedup_table_full(speedups)
-    return speedups, _speedup_stats, ax
+
+    # We sort datasets by the time it took for the baseline to reach the best score
+    sort_order = baseline_time_to_best.sort_values(ascending=False).index
+
+    minmaxes = method_time_to_beat_baseline.groupby(dataset).agg(["min", "max"])
+
+    sections = 3
+    block = len(minmaxes) // sections
+    fig, axes = plt.subplots(
+        1,
+        sections,
+        figsize=(5 * sections, len(minmaxes) / sections / 1.75),
+    )
+
+    for section, ax in zip(reversed(range(sections)), axes, strict=True):
+        datasets = sort_order[block * section : block * (section + 1)]
+        bttb_ = baseline_time_to_best.loc[datasets]
+        mm_ = minmaxes.loc[datasets]
+
+        y_ticks = np.arange(len(mm_))
+        ax.set_xlim(*x_bounds)
+        if x_bounds in X_TICKS:
+            ax.set_xticks(X_TICKS[x_bounds])
+            ax.set_xticklabels(
+                [str(x) for x in X_TICKS[x_bounds]],
+                fontsize=TICK_FONTSIZE,
+            )
+
+        if section == sections - 1:  # Since we reverse it
+            # Fig supylabel was overlapping, we do this hack instead
+            ax.set_ylabel("OpenML Task ID", fontsize=AXIS_LABEL_FONTSIZE)
+
+        ax.hlines(
+            y_ticks,
+            xmin=np.zeros(len(y_ticks)),
+            xmax=mm_["max"],
+            linestyle="dashed",
+            linewidth=1,
+            color="grey",
+            zorder=1,
+        )
+        ax.hlines(
+            y_ticks,
+            xmin=mm_["max"],
+            xmax=bttb_,
+            linestyle="solid",
+            linewidth=1,
+            color="black",
+            zorder=1,
+        )
+        ax.scatter(
+            x=bttb_,
+            y=y_ticks,
+            s=MARKER_SIZE**2,
+            marker="<",
+            c="black",
+            edgecolor="black",
+            zorder=2,
+        )
+
+        for _i, (_method, method_results) in enumerate(
+            method_time_to_beat_baseline.groupby(
+                method,
+                observed=True,
+            ),
+        ):
+            _mttbb = method_results.loc[_method].loc[datasets]
+            _color = COLORS[_method]  # type: ignore
+            _marker = MARKERS[_method]  # type: ignore
+            _style = {
+                "s": MARKER_SIZE**2,
+                "marker": _marker,
+                "color": _color,  # "white"
+                "edgecolors": _color,
+            }
+            ax.scatter(x=_mttbb, y=y_ticks, zorder=2, **_style)
+
+            rng = np.random.default_rng(0)
+            jitter_y = rng.uniform(-0.25, 0.25)
+
+            # We also mark where a method failed, bit manual but it works
+            for _tick, mttbb_single in zip(y_ticks, _mttbb, strict=True):
+                # We place a slight jitter on the x-axis so that we can see the points
+                # if they overlap
+                if np.isnan(mttbb_single):
+                    ax.scatter(
+                        x=[x_bounds[1]],
+                        y=[_tick + jitter_y],
+                        zorder=2,
+                        clip_on=False,
+                        **{**_style, "marker": "x", "s": MARKER_SIZE**2 / 2},
+                    )
+
+        ax.set_yticks(y_ticks, labels=datasets, fontsize=TICK_FONTSIZE)
+
+    methods = sorted(
+        method_time_to_beat_baseline.index.get_level_values(method).unique(),
+    )
+    legend_lines = [
+        Line2D(
+            [0],
+            [0],
+            label=RENAMES.get(m, m),
+            linestyle="",
+            markersize=MARKER_SIZE,
+            marker=MARKERS[m],
+            color=COLORS[m],
+        )
+        for m in methods
+    ]
+    legend_lines.append(
+        Line2D(
+            [0],
+            [0],
+            label="Failed to beat baseline",
+            markersize=MARKER_SIZE * 3 / 4,
+            linestyle="",
+            marker="x",
+            color="black",
+        ),
+    )
+
+    fig.supxlabel(x_label if x_label is not None else x, fontsize=AXIS_LABEL_FONTSIZE)
+
+    # Maptlotlib doesn't like this supylabel, so we'll just use the the first axis
+    # fig.supylabel("OpenML Task ID", fontsize="x-large")
+    fig.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0),
+        fontsize=LEGEND_FONTSIZE,
+        handles=legend_lines,
+        ncols=LEGEND_MAX_COLS,
+    )
+    fig.tight_layout()
+    return speedups, _speedup_stats
