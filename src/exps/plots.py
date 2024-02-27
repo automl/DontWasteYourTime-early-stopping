@@ -10,6 +10,7 @@ import matplotlib.ticker
 import numpy as np
 import pandas as pd
 from matplotlib.lines import Line2D
+from more_itertools import batched, first_true
 
 _colors = iter(plt.get_cmap("tab10").colors)  # type: ignore
 MARKER_SIZE = 10
@@ -406,7 +407,235 @@ def ranking_plots_aggregated(  # noqa: PLR0913
     return fig, axes
 
 
-def incumbent_traces_aggregated_2x3_no_test(  # noqa: PLR0913, C901
+def incumbent_traces_aggregated_with_test(  # noqa: PLR0913, C901
+    dfs: dict[str, pd.DataFrame],
+    y: str,
+    test_y: str,
+    x: str,
+    x_start: str,
+    fold: str,
+    method: str,
+    dataset: str,  # TODO: list
+    title: str,
+    *,
+    minimize: bool = False,
+    log_y: bool = False,
+    ncols_legend: int | None = None,
+    figsize_per_ax: tuple[int, int] = (6, 5),
+    x_bounds: tuple[int | float | None, int | float | None] | None = None,
+    y_bounds: tuple[int | float | None, int | float | None] | None = None,
+    x_label: str | None = None,
+    y_label: str | None = None,
+    invert: bool = False,
+    markevery: int | float | None = None,
+) -> None:
+    nrows = len(dfs)
+    ncols = 2
+    fig, axs = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(ncols * figsize_per_ax[0], nrows * figsize_per_ax[1]),
+        sharex=True,
+        sharey=False,
+    )
+    legend_lines = []
+
+    for i, ((ax_title, df), (ax_val, ax_test)) in enumerate(
+        zip(
+            dfs.items(),
+            batched(axs.flatten(), n=2, strict=True),
+            strict=True,
+        ),
+    ):
+
+        def incumbent_trace(_x: pd.DataFrame) -> pd.Series:
+            return _inc_trace(
+                _x,
+                x_start_col=x_start,
+                x_col=x,
+                y_col=y,
+                test_y_col=test_y,
+                minimize=minimize,
+            )
+
+        """
+        setting:task                                                      146818    146820    168350    168757    168784    168910  ...    359970    359971    359972    359973    359975    359979
+        setting:cv_early_stop_strategy              values time (s)                                                                 ...
+        current_average_worse_than_best_worst_split test   274.880387   0.725997  0.467660  0.387187  0.469796  0.840555  0.927984  ...  0.952019  0.445896  0.821756  0.679336  0.605856  0.630766
+                                                           275.085706   0.725997  0.467660  0.387187  0.469796  0.840555  0.927984  ...  0.952019  0.445896  0.821756  0.934713  0.605856  0.630766
+                                                           275.405484   0.725997  0.467660  0.387187  0.469796  0.840555  0.927984  ...  0.952404  0.445896  0.821756  0.934713  0.605856  0.630766
+                                                           275.600901   0.725997  0.467660  0.387187  0.469796  0.840555  0.927984  ...  0.952404  0.445896  0.821756  0.934713  0.617228  0.630766
+                                                           275.976421   0.725997  0.467660  0.387187  0.469796  0.840555  0.927984  ...  0.952404  0.445896  0.756635  0.934713  0.617228  0.630766
+        ...                                                                  ...       ...       ...       ...       ...       ...  ...       ...       ...       ...       ...       ...       ...
+        disabled                                    val    3552.753273  0.034523  0.193127  0.156118  0.010731  0.225250  0.027016  ...  0.315990  0.261195  0.170653  0.187368  0.040620  0.253996
+                                                           3559.086472  0.034523  0.193127  0.156118  0.010731  0.225250  0.027016  ...  0.315990  0.261195  0.170653  0.187368  0.040620  0.253996
+                                                           3571.056051  0.034523  0.193127  0.156118  0.010731  0.225250  0.027016  ...  0.258106  0.261195  0.170653  0.187368  0.040620  0.253996
+                                                           3584.430381  0.034523  0.193127  0.156118  0.010731  0.187467  0.027016  ...  0.258106  0.261195  0.170653  0.187368  0.040620  0.253996
+                                                           3598.315723  0.034523  0.193127  0.156118  0.010731  0.187467  0.027016  ...  0.258106  0.244365  0.170653  0.187368  0.040620  0.253996
+        """
+        inc_traces_per_dataset = (
+            df.groupby([dataset, method, fold], observed=True)
+            .apply(incumbent_trace)
+            .rename_axis(index={None: "values"})
+            .swaplevel(fold, "values")  # type: ignore
+            .unstack(fold)
+            .groupby([dataset, method, "values"], observed=True)
+            .ffill()
+            .mean(axis=1)
+            .unstack(dataset)
+            .groupby([method, "values"], observed=True)
+            .ffill()
+            .dropna()  # We can only being aggregating once we have a value for each dataset
+            .unstack("values")
+            .transform(lambda x: (x - x.min()) / (x.max() - x.min()))
+            .transform(lambda x: 1 - x if invert else x)
+            .stack("values")
+            .swaplevel("time (s)", "values")
+            .sort_index()
+        )
+
+        # Needed for y axis scaling
+        all_means = inc_traces_per_dataset.mean(axis=1)
+        val_mean_min = all_means.loc[pd.IndexSlice[:, "val"]].min()
+        test_mean_min = all_means.loc[pd.IndexSlice[:, "test"]].min()
+
+        def extend_to_x_bound(s: pd.Series) -> pd.Series:
+            if x_bounds is not None and s.index[-1] < x_bounds[1]:  # type: ignore
+                return pd.concat([s, pd.Series([s.iloc[-1]], index=[x_bounds[1]])])
+            return s
+
+        groups = inc_traces_per_dataset.groupby(method, observed=True)
+        groups = sorted(groups, key=lambda x: x[0])
+        for method_name, _df in groups:
+            # We dropna across the dataframe so that when we take mean/std, it's only
+            # once we have a datapoint for each dataset (~40s)
+            means = _df.mean(axis=1)
+            sems = _df.sem(axis=1)
+            _color = COLORS[method_name]
+            _marker = MARKERS[method_name]
+            _style = {
+                "marker": _marker,
+                "markersize": MARKER_SIZE,
+                "markerfacecolor": "white",
+                "markeredgecolor": _color,
+                "color": _color,
+            }
+
+            if i == 0:
+                legend_lines.append(
+                    Line2D(
+                        [0],
+                        [0],
+                        label=RENAMES.get(method_name, method_name),
+                        linestyle=LINE_STYLES.get(method_name, "solid"),  # type: ignore
+                        linewidth=3,
+                        **_style,
+                    ),
+                )
+
+            for _y, _ax in zip(("val", "test"), (ax_val, ax_test), strict=True):
+                _means = means.loc[method_name, _y]
+                _stds = sems.loc[method_name, _y]
+
+                _means = extend_to_x_bound(_means)
+                _stds = extend_to_x_bound(_stds)
+
+                label_name = RENAMES.get(method_name, method_name)
+
+                _means.plot(  # type: ignore
+                    drawstyle="steps-post",
+                    label=f"{label_name}",
+                    ax=_ax,
+                    linestyle=LINE_STYLES.get(method_name, "solid"),  # type: ignore
+                    markevery=markevery,
+                    linewidth=3,
+                    **_style,
+                )
+                _ax.fill_between(
+                    _means.index,  # type: ignore
+                    _means - _stds,
+                    _means + _stds,
+                    alpha=0.2,
+                    color=_color,
+                    edgecolor=_color,
+                    linewidth=2,
+                    step="post",
+                )
+
+                if x_bounds:
+                    _ax.set_xlim(*x_bounds)
+
+                    if x_bounds in X_TICKS:
+                        _ax.set_xticks(X_TICKS[x_bounds])
+                        _ax.set_xticklabels(
+                            [str(x) for x in X_TICKS[x_bounds]],
+                            fontsize=TICK_FONTSIZE,
+                        )
+
+                if y_bounds:
+                    _ax.set_ylim(*y_bounds)
+                else:
+                    _min = test_mean_min if _y == "test" else val_mean_min
+                    lower = first_true(
+                        [1 / (10**i) for i in range(10)],
+                        pred=lambda low: low < _min,  # type: ignore
+                    )
+                    _ax.set_ylim(lower, 1)
+
+                if log_y:
+                    _ax.set_yscale("log")
+
+                # Define custom formatter function to format tick labels as decimals
+                def format_func(value: float, _: int):
+                    return f"{value:.2f}"
+
+                # Apply the custom formatter to the y-axis
+                _ax.yaxis.set_major_formatter(
+                    matplotlib.ticker.FuncFormatter(format_func),
+                )
+                from matplotlib.ticker import (
+                    LogFormatter,
+                    NullFormatter,
+                )
+
+                _ax.yaxis.set_minor_formatter(LogFormatter(labelOnlyBase=False))
+                _ax.yaxis.set_minor_formatter(NullFormatter())
+                _ax.tick_params(axis="y", which="both", labelsize=TICK_FONTSIZE)
+                _ax.set_title(f"{ax_title} ({_y})", fontsize=AXIS_TITLE_FONTSIZE)
+
+    fig.suptitle(title, fontsize=FIG_TITLE_FONTSIZE)
+    fig.supxlabel(
+        x_label if x_label is not None else x,
+        fontsize=AXIS_LABEL_FONTSIZE,
+    )
+    fig.supylabel(
+        y_label if y_label is not None else y,
+        fontsize=AXIS_LABEL_FONTSIZE,
+    )
+    ncols_legend = ncols_legend if ncols_legend is not None else LEGEND_MAX_COLS
+
+    # Hacky way to sort legend, where baseline is always last
+    legend_lines = sorted(
+        legend_lines,
+        key=lambda line: label
+        if (label := line.get_label())
+        not in (
+            RENAMES.get("disabled"),
+            RENAMES.get("smac_early_stop_as_failed-disabled"),
+        )
+        else "ZZZ",
+    )
+    fig.legend(
+        loc="upper center",
+        handles=legend_lines,
+        bbox_to_anchor=(0.5, 0),
+        fontsize=LEGEND_FONTSIZE,
+        ncols=ncols_legend,
+    )
+    fig.tight_layout()
+
+
+def incumbent_traces_aggregated_no_test(  # noqa: PLR0913, C901
     dfs: dict[str, pd.DataFrame],
     y: str,
     test_y: str,
@@ -420,6 +649,7 @@ def incumbent_traces_aggregated_2x3_no_test(  # noqa: PLR0913, C901
     minimize: bool = False,
     log_y: bool = False,
     nrows: int = 2,
+    ncols_legend: int | None = None,
     figsize_per_ax: tuple[int, int] = (6, 5),
     x_bounds: tuple[int | float | None, int | float | None] | None = None,
     y_bounds: tuple[int | float | None, int | float | None] | None = None,
@@ -572,12 +802,25 @@ def incumbent_traces_aggregated_2x3_no_test(  # noqa: PLR0913, C901
         y_label if y_label is not None else y,
         fontsize=AXIS_LABEL_FONTSIZE,
     )
+    ncols_legend = ncols_legend if ncols_legend is not None else LEGEND_MAX_COLS
+
+    # Hacky way to sort legend, where baseline is always last
+    legend_lines = sorted(
+        legend_lines,
+        key=lambda line: label
+        if (label := line.get_label())
+        not in (
+            RENAMES.get("disabled"),
+            RENAMES.get("smac_early_stop_as_failed-disabled"),
+        )
+        else "ZZZ",
+    )
     fig.legend(
         loc="upper center",
         handles=legend_lines,
         bbox_to_anchor=(0.5, 0),
         fontsize=LEGEND_FONTSIZE,
-        ncols=LEGEND_MAX_COLS,
+        ncols=ncols_legend,
     )
     fig.tight_layout()
 
@@ -593,11 +836,11 @@ def incumbent_traces_aggregated(  # noqa: PLR0913, C901
     dataset: str,  # TODO: list
     title: str,
     *,
+    figsize_per_ax: tuple[int, int] = (6, 5),
     minimize: bool = False,
     log_y: bool = False,
     x_bounds: tuple[int | float | None, int | float | None] | None = None,
     y_bounds: tuple[int | float | None, int | float | None] | None = None,
-    fig_ax: tuple[plt.Figure, plt.Axes] | None = None,
     x_label: str | None = None,
     y_label: str | None = None,
     invert: bool = False,
@@ -634,10 +877,11 @@ def incumbent_traces_aggregated(  # noqa: PLR0913, C901
         .sort_index()
     )
 
-    if fig_ax is None:
-        fig, axes = plt.subplots(1, 2, figsize=(20, 10))
-    else:
-        fig, axes = fig_ax
+    fig, axes = plt.subplots(
+        1,
+        2,
+        figsize=(figsize_per_ax[0] * 2, figsize_per_ax[1] * 1),
+    )
 
     val_ax = axes[0]
     test_ax = axes[1]
@@ -720,7 +964,7 @@ def incumbent_traces_aggregated(  # noqa: PLR0913, C901
 
         # Define custom formatter function to format tick labels as decimals
         def format_func(value: float, _: int):
-            return f"{value:.1f}"
+            return f"{value:.2f}"
 
         # Apply the custom formatter to the y-axis
         _ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(format_func))

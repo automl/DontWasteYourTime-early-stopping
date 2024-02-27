@@ -27,7 +27,6 @@ from sklearn.manifold import MDS
 from exps.methods import METHODS
 from exps.pipelines import PIPELINES
 from exps.plots import (
-    AXIS_LABEL_FONTSIZE,
     COLORS,
     LEGEND_FONTSIZE,
     MARKER_SIZE,
@@ -460,6 +459,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--njobs", type=int, default=-1)
     parser.add_argument("--figsize", type=int, default=10)
     parser.add_argument("--outpath", type=Path, required=True)
     parser.add_argument("--pipeline", type=str, choices=["mlp", "rf"], default="mlp")
@@ -547,7 +547,7 @@ def main():
         scaling_factors={hp.name: 1 for hp in space.get_hyperparameters()},
         random_state=args.seed,
         distance_metric="cityblock",
-        n_jobs=1,
+        n_jobs=args.njobs,
         mds_kwargs={
             "max_iter": args.max_iter,
         },
@@ -563,6 +563,8 @@ def main():
         palette=COLORS,
         xlim=(surface.data["emb-x"].min(), surface.data["emb-x"].max()),
         ylim=(surface.data["emb-y"].min(), surface.data["emb-y"].max()),
+        space=0.0001,
+        marginal_ticks=False,
     )
     # Plot heatmap w.r.t. performance
     # Normalize the performance metric for a smoother finish
@@ -649,6 +651,18 @@ def main():
     method_only_scored = method_only[method_only["is_scored_method"]]
     method_only_not_scored = method_only[~method_only["is_scored_method"]]
 
+    EARLY_STOPPED_LABEL = "Early Stopped"
+    g.ax_joint.scatter(
+        data=method_only_not_scored,
+        x="emb-x_method",
+        y="emb-y_method",
+        color=COLORS[args.method],
+        marker=".",
+        edgecolors="black",
+        s=MARKER_SIZE**2 * (3 / 4),
+        label=EARLY_STOPPED_LABEL,
+        alpha=0.3,
+    )
     g.ax_joint.scatter(
         data=both_scored,
         x="emb-x_baseline",
@@ -658,6 +672,7 @@ def main():
         s=MARKER_SIZE**2,
         edgecolors="black",
         label="Both",
+        alpha=0.8,
     )
     g.ax_joint.scatter(
         data=baseline_only_scored,
@@ -668,6 +683,7 @@ def main():
         s=MARKER_SIZE**2,
         edgecolors="black",
         label=RENAMES.get(args.method, args.method),
+        alpha=0.7,
     )
     g.ax_joint.scatter(
         data=method_only_scored,
@@ -678,17 +694,7 @@ def main():
         edgecolors="black",
         s=MARKER_SIZE**2,
         label=RENAMES.get(args.method, args.method),
-    )
-    EARLY_STOPPED_LABEL = f"{RENAMES.get(args.method, args.method)} (early stop)"
-    g.ax_joint.scatter(
-        data=method_only_not_scored,
-        x="emb-x_method",
-        y="emb-y_method",
-        color=COLORS[args.method],
-        marker=".",
-        edgecolors="black",
-        s=MARKER_SIZE**2 * (3 / 4),
-        label=EARLY_STOPPED_LABEL,
+        alpha=0.7,
     )
     g.ax_joint.scatter(
         data=surface.data.loc[border_df.index],
@@ -696,6 +702,7 @@ def main():
         y="emb-y",
         color="grey",
         marker="x",
+        alpha=0.2,
         s=MARKER_SIZE,
     )
 
@@ -750,14 +757,36 @@ def main():
             linestyle="",
         ),
     ]
+    g.ax_joint.set_xlabel("")
+    g.ax_joint.set_ylabel("")
+    g.ax_joint.set_xticks([])
+    g.ax_joint.set_xticklabels([])
+    g.ax_joint.set_yticks([])
+    g.ax_joint.set_yticklabels([])
+
+    for ax in [g.ax_marg_x, g.ax_marg_y, g.ax_joint]:
+        ax.tick_params(
+            axis="both",  # changes apply to the x-axis
+            which="both",  # both major and minor ticks are affected
+            bottom=False,  # ticks along the bottom edge are off
+            top=False,  # ticks along the top edge are off
+            left=False,  # ticks along the left edge are off
+            right=False,  # ticks along the right edge are off
+            labelbottom=False,
+        )  # labels along the bottom edge are off
+
+    g.figure.tight_layout(h_pad=0, w_pad=0, pad=1.00)
+
+    # Place legend in top right of figure
     g.figure.legend(
+        loc="upper right",
+        bbox_to_anchor=(0.98, 0.98),
         fontsize=LEGEND_FONTSIZE,
         handles=legend_markers,
     )
-    g.ax_joint.set_xlabel("MDS x", fontsize=AXIS_LABEL_FONTSIZE)
-    g.ax_joint.set_ylabel("MDS y", fontsize=AXIS_LABEL_FONTSIZE)
-    g.figure.tight_layout()
-    plt.savefig(args.outpath)
+
+    for ext in ["png", "pdf"]:
+        plt.savefig(f"{args.outpath}.{ext}", bbox_inches="tight", dpi=300)
 
 
 if __name__ == "__main__":

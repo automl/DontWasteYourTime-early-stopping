@@ -14,7 +14,8 @@ from exps.methods import METHODS
 from exps.metrics import METRICS
 from exps.plots import (
     incumbent_traces_aggregated,
-    incumbent_traces_aggregated_2x3_no_test,
+    incumbent_traces_aggregated_no_test,
+    incumbent_traces_aggregated_with_test,
     ranking_plots_aggregated,
     speedup_plots,
 )
@@ -33,26 +34,33 @@ EXP_NAME: TypeAlias = Literal[
     "category3-nsplits-10",
     "category3-nsplits-5",
     "category3-nsplits-3",
-    "category4-nsplits-10",
+    "category4-nsplits-20",
     "category4-nsplits-5",
     "category4-nsplits-3",
     "category5-nsplits-10",
     "category5-nsplits-20",
     "category6-nsplits-10",
+    "category6-nsplits-20",
 ]
 EXP_CHOICES = [
     "debug",
     "time-analysis",
+    # -------
     "category3-nsplits-20",  # MLP pipeline (2 repeat, 10 fold)
     "category3-nsplits-10",  # MLP pipeline
     "category3-nsplits-5",  # MLP pipeline
     "category3-nsplits-3",  # MLP pipeline
+    # -------
+    "category4-nsplits-20",  # RF pipeline (2 repeat, 10 fold)
     "category4-nsplits-10",  # RF pipeline
     "category4-nsplits-5",  # RF pipeline
     "category4-nsplits-3",  # RF pipeline
+    # -------
     "category5-nsplits-10",  # {Default SMAC, SMAC w/ early stop mean report} MLP
     "category5-nsplits-20",  # {Default SMAC, SMAC w/ early stop mean report} MLP
+    # -------
     "category6-nsplits-10",  # {Default SMAC, SMAC w/ early stop mean report} RF
+    "category6-nsplits-20",  # {Default SMAC, SMAC w/ early stop mean report} RF
 ]
 
 
@@ -106,11 +114,16 @@ def exp_name_to_result_dir(exp_name: EXP_NAME) -> Path:
             | "category3-nsplits-3"
         ):
             return Path("results-category3").resolve()
-        case "category4-nsplits-10" | "category4-nsplits-5" | "category4-nsplits-3":
+        case (
+            "category4-nsplits-10"
+            | "category4-nsplits-5"
+            | "category4-nsplits-3"
+            | "category4-nsplits-20"
+        ):
             return Path("results-category4").resolve()
         case "category5-nsplits-10" | "category5-nsplits-20":
             return Path("results-category5").resolve()
-        case "category6-nsplits-10":
+        case "category6-nsplits-10" | "category6-nsplits-20":
             return Path("results-category6").resolve()
         case "debug":
             return Path("results-debug").resolve()
@@ -185,6 +198,16 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                 "current_average_worse_than_mean_best",
                 "robust_std_top_3",
                 "robust_std_top_5",
+            ]
+        case "category4-nsplits-20":
+            n_splits = [20]
+            pipeline = "rf_classifier"
+            methods = [
+                "disabled",
+                "current_average_worse_than_best_worst_split",
+                "current_average_worse_than_mean_best",
+                # "robust_std_top_3", (maybe)  # noqa: ERA001
+                # "robust_std_top_5", (maybe)  # noqa: ERA001
             ]
         case "category4-nsplits-10":
             # This suite is running everything that had more
@@ -303,6 +326,58 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                     "current_average_worse_than_mean_best",
                     "robust_std_top_3",
                     "robust_std_top_5",
+                ],
+            )
+            opt_methods = chain(opt_method_set_1, opt_method_set_2)
+            return [
+                E1(
+                    # Parameters defining experiments
+                    task=task,
+                    fold=fold,
+                    n_splits=n_splits,
+                    # Constants for now
+                    pipeline=pipeline,
+                    n_cpus=n_cpu,
+                    optimizer=optimizer,
+                    memory_gb=mem_per_cpu_gb * n_cpu,
+                    time_seconds=time_seconds,
+                    experiment_seed=experiment_fixed_seed,
+                    minimum_trials=1,  # Takes no effect...
+                    metric=metric,
+                    # Extra
+                    wait=False,
+                    root=result_dir,
+                    cv_early_stop_strategy=method,
+                    openml_cache_directory=(Path() / ".openml-cache").resolve(),
+                )
+                for task, fold, n_splits, (optimizer, method) in product(
+                    suite,
+                    folds,
+                    n_splits,
+                    opt_methods,
+                )
+            ]
+        case "category6-nsplits-20":
+            n_splits = [20]
+            pipeline = "rf_classifier"
+            opt_method_set_1 = product(
+                ["smac_early_stop_as_failed"],
+                [
+                    "disabled",
+                    "current_average_worse_than_best_worst_split",
+                    "current_average_worse_than_mean_best",
+                    # "robust_std_top_3",
+                    # "robust_std_top_5",
+                ],
+            )
+            opt_method_set_2 = product(
+                ["smac_early_stop_with_fold_mean"],
+                [
+                    # No "disabled" as it makes no sense to run with early stopping
+                    "current_average_worse_than_best_worst_split",
+                    "current_average_worse_than_mean_best",
+                    # "robust_std_top_3",
+                    # "robust_std_top_5",
                 ],
             )
             opt_methods = chain(opt_method_set_1, opt_method_set_2)
@@ -473,12 +548,16 @@ def main():  # noqa: C901, PLR0915, PLR0912
         p.add_argument("--out", type=Path, required=True)
         p.add_argument("--no-config", action="store_true")
 
-    with cmds("plot-2x3") as p:
+    with cmds("plot-stacked") as p:
         p.add_argument("--outpath", type=Path, default=Path("./plots"))
         p.add_argument("--prefix", type=str, required=True)
         p.add_argument("--metric", type=str, choices=METRICS.keys(), required=True)
         p.add_argument("--n-splits", nargs="+", type=int, required=True)
         p.add_argument("--time-limit", type=int, required=True)
+        p.add_argument("--ncols-legend", type=int, default=None)
+        p.add_argument("--ax-width", type=float, default=6)
+        p.add_argument("--ax-height", type=float, default=5)
+        p.add_argument("--with-test", action="store_true")
         p.add_argument(
             "--methods",
             nargs="+",
@@ -504,6 +583,8 @@ def main():  # noqa: C901, PLR0915, PLR0912
     with cmds("plot") as p:
         p.add_argument("--outpath", type=Path, default=Path("./plots"))
         p.add_argument("--prefix", type=str, required=True)
+        p.add_argument("--ax-width", type=float, default=6)
+        p.add_argument("--ax-height", type=float, default=5)
         p.add_argument("--metric", type=str, choices=METRICS.keys(), required=True)
         p.add_argument("--n-splits", type=int, required=True)
         p.add_argument("--time-limit", type=int, required=True)
@@ -518,7 +599,6 @@ def main():  # noqa: C901, PLR0915, PLR0912
             "--model",
             type=str,
             choices=["mlp", "rf"],
-            nargs="+",
             required=True,
         )
         p.add_argument("--merge-opt-into-method", action="store_true")
@@ -538,7 +618,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
         )
 
     args = parser.parse_args()
-    if args.command == "plot-2x3":
+    if args.command == "plot-stacked":
         import matplotlib.pyplot as plt
 
         args.outpath.mkdir(parents=True, exist_ok=True)
@@ -573,39 +653,77 @@ def main():  # noqa: C901, PLR0915, PLR0912
             for n_splits, _df in _dfs.items()
         }
 
+        title = f"Incumbent Traces, {N_DATASETS} Datasets"
         if args.merge_opt_into_method:
             for _, _df in _dfs.items():
-                _df["setting:opt-method"] = _df["setting:optimizer"].str.cat(
+                _df.loc[:, "setting:opt-method"] = _df["setting:optimizer"].str.cat(
                     _df["setting:cv_early_stop_strategy"],
                     sep="-",
                 )
+            _dfs = {
+                k.replace("MLP", "Optimized MLP").replace("RF", "Optimized RF"): v
+                for k, v in _dfs.items()
+            }
             method_col = "setting:opt-method"
             baseline = "smac_early_stop_as_failed-disabled"  # Used for speedups
+            title = f"Optimized {title}"
         else:
             method_col = "setting:cv_early_stop_strategy"
             baseline = "disabled"  # Used for speedups
 
-        incumbent_traces_aggregated_2x3_no_test(
-            _dfs,
-            y=f"metric:{metric}",
-            test_y=f"summary:test_bagged_{metric.name}",
-            method=method_col,
-            fold="setting:fold",
-            dataset="setting:task",
-            x="reported_at",
-            x_start="created_at",
-            x_label="Time (s)",
-            y_label="1 - Normalized ROC AUC [OVR]",
-            figsize_per_ax=(4, 3),
-            title=f"Incumbent Traces, {N_DATASETS} Datasets",
-            x_bounds=(0, time_limit),
-            minimize=metric.minimize,
-            invert=True,
-            log_y=True,
-            markevery=0.1,
-        )
+        match len(_dfs):
+            case 2:
+                nrows = 1
+            case 6:
+                nrows = 2
+            case _:
+                raise ValueError("Not handled.")
+
+        if args.with_test:
+            incumbent_traces_aggregated_with_test(
+                _dfs,
+                y=f"metric:{metric}",
+                test_y=f"summary:test_bagged_{metric.name}",
+                method=method_col,
+                fold="setting:fold",
+                dataset="setting:task",
+                x="reported_at",
+                x_start="created_at",
+                x_label="Time (s)",
+                y_label="1 - Normalized ROC AUC [OVR]",
+                title=title,
+                figsize_per_ax=(args.ax_width, args.ax_height),
+                x_bounds=(0, time_limit),
+                ncols_legend=args.ncols_legend,
+                minimize=metric.minimize,
+                invert=True,
+                log_y=True,
+                markevery=0.1,
+            )
+        else:
+            incumbent_traces_aggregated_no_test(
+                _dfs,
+                y=f"metric:{metric}",
+                test_y=f"summary:test_bagged_{metric.name}",
+                method=method_col,
+                fold="setting:fold",
+                dataset="setting:task",
+                x="reported_at",
+                x_start="created_at",
+                x_label="Time (s)",
+                y_label="1 - Normalized ROC AUC [OVR]",
+                title=title,
+                figsize_per_ax=(args.ax_width, args.ax_height),
+                x_bounds=(0, time_limit),
+                ncols_legend=args.ncols_legend,
+                minimize=metric.minimize,
+                nrows=nrows,
+                invert=True,
+                log_y=True,
+                markevery=0.1,
+            )
         for ext in ["pdf", "png"]:
-            filepath = args.outpath / f"{args.prefix}-inc-2x3.{ext}"
+            filepath = args.outpath / f"{args.prefix}-inc-stacked.{ext}"
             plt.savefig(filepath, bbox_inches="tight")
 
         return
@@ -624,7 +742,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
         _df = _df[_df["setting:cv_early_stop_strategy"].isin(args.methods)]
 
         if args.merge_opt_into_method:
-            _df["setting:opt-method"] = _df["setting:optimizer"].str.cat(
+            _df.loc[:, "setting:opt-method"] = _df["setting:optimizer"].str.cat(
                 _df["setting:cv_early_stop_strategy"],
                 sep="-",
             )
@@ -647,6 +765,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     fold="setting:fold",
                     dataset="setting:task",
                     x="reported_at",
+                    figsize_per_ax=(args.ax_width, args.ax_height),
                     x_start="created_at",
                     x_label="Time (s)",
                     y_label="1 - Normalized ROC AUC [OVR]",
