@@ -164,10 +164,24 @@ class E1(Slurmable):
         if cs is not None:
             parquet_file = pq.ParquetFile(history_path)
             present_columns = parquet_file.schema.names
-            cs = [c for c in cs if c in present_columns]
+            cs = [c for c in cs if c in present_columns or c.startswith("config:Seq-")]
 
         _df = pd.read_parquet(history_path, columns=cs)
         _df = _df.assign(**{f"setting:{k}": v for k, v in self._values().items()})
+
+        if self.pipeline == "rf_classifier":
+            # NOTE: we accidentally didn't name the rf pipeline which means we
+            # have randuids isntead of `"rf_classifier". We rename these columns
+            # accordingly
+            seq_columns = {
+                c: c.split(":")[1] for c in _df.columns if c.startswith("config:Seq-")
+            }
+            _df = _df.rename(
+                columns={
+                    c: c.replace(v, "rf_classifier") for c, v in seq_columns.items()
+                },
+            )
+
         return shrink_dataframe(_df)
 
     def python_path(self) -> Path:

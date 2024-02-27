@@ -177,6 +177,9 @@ rf_classifier = Sequential(
             "n_jobs": 1,
         },
     ),
+    # Whoops, should have added `name="rf_classifier"` here
+    # We can circumvent this by renaming these columns such that these columns overlap as
+    # needed. This is only relevant for footprint plots.
 )
 
 PIPELINES = {

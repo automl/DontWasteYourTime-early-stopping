@@ -627,12 +627,17 @@ def main():  # noqa: C901, PLR0915, PLR0912
             )
 
             if not args.no_config:
-                columns_to_load += [
+                config_cols = [
                     f"config:{k}"
                     for k in PIPELINES[first.pipeline].search_space(
                         parser="configspace",
                     )
                 ]
+                if first.pipeline == "rf_pipeline":
+                    config_cols = [
+                        c.replace(c.split(":")[1], "rf_classifier") for c in config_cols
+                    ]
+                columns_to_load += config_cols
 
             print(f"Columns to load: {columns_to_load}")
 
