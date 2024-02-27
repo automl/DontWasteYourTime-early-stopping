@@ -865,9 +865,12 @@ def main():  # noqa: C901, PLR0915, PLR0912
                         parser="configspace",
                     )
                 ]
-                if first.pipeline == "rf_pipeline":
+                if first.pipeline == "rf_classifier":
                     config_cols = [
-                        c.replace(c.split(":")[1], "rf_classifier") for c in config_cols
+                        c.replace(c.split(":")[1], "rf_classifier")
+                        if c.startswith("config:Seq-")
+                        else c
+                        for c in config_cols
                     ]
                 columns_to_load += config_cols
 
