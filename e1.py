@@ -35,6 +35,7 @@ EXP_NAME: TypeAlias = Literal[
     "category3-nsplits-5",
     "category3-nsplits-3",
     "category4-nsplits-20",
+    "category4-nsplits-10",
     "category4-nsplits-5",
     "category4-nsplits-3",
     "category5-nsplits-10",
