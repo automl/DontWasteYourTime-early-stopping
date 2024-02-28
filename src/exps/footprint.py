@@ -11,6 +11,7 @@ from itertools import pairwise, product
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import matplotlib.gridspec
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -20,6 +21,7 @@ from ConfigSpace import (
     OrdinalHyperparameter,
 )
 from ConfigSpace.util import deactivate_inactive_hyperparameters
+from matplotlib.lines import Line2D
 from scipy.spatial.distance import pdist, squareform
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.manifold import MDS
@@ -33,12 +35,17 @@ from exps.plots import (
     MARKERS,
     RENAMES,
 )
+from exps.seaborn2fig import SeabornFig2Grid
 
 if TYPE_CHECKING:
     from ConfigSpace import ConfigurationSpace
     from ConfigSpace.hyperparameters import Hyperparameter
 
 logger = logging.getLogger(__name__)
+
+
+def leg(**kwargs: Any) -> Line2D:
+    return Line2D([], [], linestyle="", **kwargs)
 
 
 def bin():
@@ -481,16 +488,17 @@ def main():
     parser.add_argument("--support", type=int, default=100)
     parser.add_argument("--borders", type=int, default=100)
     parser.add_argument(
-        "--method",
+        "--methods",
         choices=list(METHODS.keys()),
         default="current_average_worse_than_best_worst_split",
+        nargs="+",
         type=str,
     )
     parser.add_argument("input", type=Path)
     args = parser.parse_args()
 
-    methods = "setting:cv_early_stop_strategy"
-    fold = "setting:fold"
+    method_col = "setting:cv_early_stop_strategy"
+    fold_col = "setting:fold"
     space = PIPELINES[f"{args.pipeline}_classifier"].search_space(parser="configspace")
 
     df = pd.read_parquet(args.input)
@@ -498,7 +506,7 @@ def main():
     # Select out the dataset
     df = df[df["setting:task"] == args.dataset]  # type: ignore
     df = df[df["setting:fold"] == args.fold]  # type: ignore
-    df = df[df["setting:cv_early_stop_strategy"].isin([args.baseline, args.method])]  # type: ignore
+    df = df[df["setting:cv_early_stop_strategy"].isin([args.baseline, *args.methods])]  # type: ignore
     assert isinstance(df, pd.DataFrame)
     df.index = df.index.astype(str)
     index_name = df.index.name
@@ -513,8 +521,8 @@ def main():
         .convert_dtypes()
         .reset_index()
     )
-    df["method"] = df[methods].copy()
-    df = df.set_index(keys=[methods, fold, index_name]).sort_index()
+    df["method"] = df[method_col].copy()
+    df = df.set_index(keys=[method_col, fold_col, index_name]).sort_index()
 
     # TODO: Will break if we need to operate across folds... (maybe)
     border_df = pd.DataFrame.from_records(
@@ -525,7 +533,8 @@ def main():
     cs = deepcopy(space)
     cs.seed(args.seed)
     if args.support > 0:
-        configs = [c.get_dictionary() for c in cs.sample_configuration(args.support)]
+        sampled_configs = cs.sample_configuration(args.support)
+        configs = [c.get_dictionary() for c in sampled_configs]
         support_df = pd.DataFrame.from_records(
             configs,
             index=[("support", 0, f"trial_{i}") for i in range(args.support)],
@@ -534,13 +543,15 @@ def main():
         support_df = pd.DataFrame()
 
     baseline_data = df.xs(args.baseline, drop_level=False)
-    method_data = df.xs(args.method, drop_level=False)
+    method_datas = [df.xs(m, drop_level=False) for m in args.methods]
 
     X = pd.concat(
-        [baseline_data, support_df, method_data, border_df],
+        [baseline_data, support_df, *method_datas, border_df],
         names=["method", "fold", "trial"],
     )
 
+    # We can't drop duplicates as we need to keep indices for later indexing,
+    # this will make MDS work a little harder to produce it's embedding as a consequence.
     surface = MDSSurface.generate(
         X=X,
         space=space,
@@ -552,25 +563,9 @@ def main():
             "max_iter": args.max_iter,
         },
     )
-
     real_data = surface.data.loc[df.index]
-    g = sns.JointGrid(
-        height=args.figsize,
-        data=real_data,
-        x="emb-x",
-        y="emb-y",
-        hue="method",
-        palette=COLORS,
-        xlim=(surface.data["emb-x"].min(), surface.data["emb-x"].max()),
-        ylim=(surface.data["emb-y"].min(), surface.data["emb-y"].max()),
-        space=0.0001,
-        marginal_ticks=False,
-    )
-    # Plot heatmap w.r.t. performance
-    # Normalize the performance metric for a smoother finish
-    ys = surface.data[args.metric].dropna()
-    assert isinstance(ys, pd.Series)
 
+    # Create performance heatmap
     perf_model = surface.performance_model(
         metric_col=args.metric,
         fillna=0,
@@ -581,209 +576,228 @@ def main():
         granularity=args.granularity,
         expand_axis=0,
     )
-
-    g.ax_joint.contourf(
-        perf_x,
-        perf_y,
-        perf_z,
-        cmap="Purples",
-        alpha=0.5,
-    )
-
-    # Plot valid area
+    # Create valid area heatmap
     area_model = surface.area_model(granularity=args.granularity, expand_axis=0.0)
     area_x, area_y, area_z = surface.heatmap(
         area_model,
         granularity=args.granularity,
         expand_axis=0,
     )
-
-    area_z[area_z < 0.8] = 0
-    g.ax_joint.contour(
-        area_x,
-        area_y,
-        area_z,
-        levels=1,
-        colors="black",
-        alpha=0.5,
-        linestyles="dotted",
-    )
-
-    # Plot marginals with a kde
-    g.plot_marginals(
-        sns.kdeplot,
-        fill=True,
-        common_norm=True,
-        common_grid=True,
-    )
-
-    # Now using the real data, we need to seperate it into different categories:
-    # * Configs which both baseline and method fully scored (both)
-    # * Configs which only the baseline scored (left_only)
-    # * Configs which only the method scored (right_only)
-    # * Configs which method early stopped
-
-    real_data["is_scored"] = real_data[args.metric].notna()
-
-    config_cols = list(config_cols)
-    merge_cols = [*config_cols]
-    extra_cols = ["emb-x", "emb-y", "is_scored"]
-    select_cols = merge_cols + extra_cols
-
-    baseline_data = real_data.xs(args.baseline, drop_level=False)[select_cols]
-    method_data = real_data.xs(args.method, drop_level=False)[select_cols]
-
-    merged_data = pd.merge(
-        baseline_data,
-        method_data,
-        how="outer",
-        on=merge_cols,
-        suffixes=("_baseline", "_method"),
-        indicator=True,
-    )
-    both = merged_data[merged_data["_merge"] == "both"]
-    # Baseline will have scored it
-    both_scored = both[both["is_scored_baseline"] & both["is_scored_method"]]
-
-    baseline_only_scored = both[both["is_scored_baseline"] & ~both["is_scored_method"]]
-
-    method_only = merged_data[merged_data["_merge"] == "right_only"]
-    method_only_scored = method_only[method_only["is_scored_method"]]
-    method_only_not_scored = method_only[~method_only["is_scored_method"]]
-
-    EARLY_STOPPED_LABEL = "Early Stopped"
-    g.ax_joint.scatter(
-        data=method_only_not_scored,
-        x="emb-x_method",
-        y="emb-y_method",
-        color=COLORS[args.method],
-        marker=".",
-        edgecolors="black",
-        s=MARKER_SIZE**2 * (3 / 4),
-        label=EARLY_STOPPED_LABEL,
-        alpha=0.3,
-    )
-    g.ax_joint.scatter(
-        data=both_scored,
-        x="emb-x_baseline",
-        y="emb-y_baseline",
-        color=COLORS["both"],
-        marker=MARKERS["both"],
-        s=MARKER_SIZE**2,
-        edgecolors="black",
-        label="Both",
-        alpha=0.8,
-    )
-    g.ax_joint.scatter(
-        data=baseline_only_scored,
-        x="emb-x_baseline",
-        y="emb-y_baseline",
-        color=COLORS[args.baseline],
-        marker=MARKERS[args.baseline],
-        s=MARKER_SIZE**2,
-        edgecolors="black",
-        label=RENAMES.get(args.method, args.method),
-        alpha=0.7,
-    )
-    g.ax_joint.scatter(
-        data=method_only_scored,
-        x="emb-x_method",
-        y="emb-y_method",
-        color=COLORS[args.method],
-        marker=MARKERS[args.method],
-        edgecolors="black",
-        s=MARKER_SIZE**2,
-        label=RENAMES.get(args.method, args.method),
-        alpha=0.7,
-    )
-    g.ax_joint.scatter(
-        data=surface.data.loc[border_df.index],
-        x="emb-x",
-        y="emb-y",
-        color="grey",
-        marker="x",
-        alpha=0.2,
-        s=MARKER_SIZE,
-    )
+    area_z[area_z < 0.8] = 0  # noqa: PLR2004
 
     legend_markers = [
-        plt.Line2D(
-            [0],
-            [0],
-            marker="x",
-            color="black",
-            label="Border",
-            markersize=MARKER_SIZE,
-            linestyle="",
-        ),
-        plt.Line2D(
-            [0],
-            [0],
-            marker=".",
-            markeredgecolor="black",
-            color=COLORS[args.method],
-            label=EARLY_STOPPED_LABEL,
-            markersize=MARKER_SIZE,
-            linestyle="",
-        ),
-        plt.Line2D(
-            [0],
-            [0],
+        leg(marker="x", color="black", label="Border", markersize=MARKER_SIZE),
+        leg(
             markeredgecolor="black",
             marker=MARKERS[args.baseline],
             color=COLORS[args.baseline],
             label=RENAMES.get(args.baseline, args.baseline),
             markersize=MARKER_SIZE,
-            linestyle="",
         ),
-        plt.Line2D(
-            [0],
-            [0],
-            markeredgecolor="black",
-            marker=MARKERS[args.method],
-            color=COLORS[args.method],
-            label=RENAMES.get(args.method, args.method),
-            markersize=MARKER_SIZE,
-            linestyle="",
-        ),
-        plt.Line2D(
-            [0],
-            [0],
+        leg(
             markeredgecolor="black",
             marker=MARKERS["both"],
             color=COLORS["both"],
             label="Both",
             markersize=MARKER_SIZE,
-            linestyle="",
         ),
     ]
-    g.ax_joint.set_xlabel("")
-    g.ax_joint.set_ylabel("")
-    g.ax_joint.set_xticks([])
-    g.ax_joint.set_xticklabels([])
-    g.ax_joint.set_yticks([])
-    g.ax_joint.set_yticklabels([])
+    for method in args.methods:
+        METHOD_NAME = RENAMES.get(method, method)
+        EARLY_STOPPED_LABEL = f"{METHOD_NAME} (ES)"
+        legend_markers.extend(
+            [
+                leg(
+                    marker=".",
+                    markeredgecolor="black",
+                    color=COLORS[method],
+                    label=EARLY_STOPPED_LABEL,
+                    markersize=MARKER_SIZE,
+                ),
+                leg(
+                    markeredgecolor="black",
+                    marker=MARKERS[method],
+                    color=COLORS[method],
+                    label=METHOD_NAME,
+                    markersize=MARKER_SIZE,
+                ),
+            ],
+        )
 
-    for ax in [g.ax_marg_x, g.ax_marg_y, g.ax_joint]:
-        ax.tick_params(
-            axis="both",  # changes apply to the x-axis
-            which="both",  # both major and minor ticks are affected
-            bottom=False,  # ticks along the bottom edge are off
-            top=False,  # ticks along the top edge are off
-            left=False,  # ticks along the left edge are off
-            right=False,  # ticks along the right edge are off
-            labelbottom=False,
-        )  # labels along the bottom edge are off
+    grids = []
+    things_to_plot = [args.baseline, *args.methods]
+    for i_method, _method in enumerate(things_to_plot):
+        # General plot figure
+        g = sns.JointGrid(
+            height=args.figsize,
+            data=real_data,
+            x="emb-x",
+            y="emb-y",
+            hue="method",
+            palette=COLORS,
+            xlim=(surface.data["emb-x"].min(), surface.data["emb-x"].max()),
+            ylim=(surface.data["emb-y"].min(), surface.data["emb-y"].max()),
+            space=0.0001,
+            marginal_ticks=False,
+        )
+        g.ax_joint.contourf(perf_x, perf_y, perf_z, cmap="Purples", alpha=0.5)
+        g.ax_joint.contour(
+            area_x,
+            area_y,
+            area_z,
+            levels=1,
+            colors="black",
+            alpha=0.5,
+            linestyles="dotted",
+        )
 
-    g.figure.tight_layout(h_pad=0, w_pad=0, pad=1.00)
+        # Plot marginals on x-axis with a kde
+        sns.kdeplot(
+            data=real_data,
+            x="emb-x",
+            hue="method",
+            fill=True,
+            common_norm=True,
+            common_grid=True,
+            palette=COLORS,
+            ax=g.ax_marg_x,
+        )
+
+        if i_method == len(things_to_plot) - 1:
+            # Plot marginals on y-axis with a kde
+            sns.kdeplot(
+                data=real_data,
+                x="emb-y",
+                hue="method",
+                fill=True,
+                common_norm=True,
+                common_grid=True,
+                palette=COLORS,
+                ax=g.ax_marg_y,
+                vertical=True,
+            )
+
+        # Now using the real data, we need to seperate it into different categories:
+        # * Configs which both baseline and method fully scored (both)
+        # * Configs which only the baseline scored (left_only)
+        # * Configs which only the method scored (right_only)
+        # * Configs which method early stopped
+        _data = real_data[real_data["method"].isin([args.baseline, _method])]
+        _data["is_scored"] = _data[args.metric].notna()
+
+        config_cols = list(config_cols)
+        merge_cols = [*config_cols]
+        extra_cols = ["emb-x", "emb-y", "is_scored"]
+        select_cols = merge_cols + extra_cols
+
+        baseline_data = _data.xs(args.baseline, drop_level=False)[select_cols]
+        method_data = _data.xs(_method, drop_level=False)[select_cols]
+
+        if _method == args.baseline:
+            baseline_scored = baseline_data[baseline_data["is_scored"]]
+            g.ax_joint.scatter(
+                data=baseline_scored,
+                x="emb-x",
+                y="emb-y",
+                color=COLORS[_method],
+                marker=".",
+                edgecolors="black",
+                s=MARKER_SIZE**2 * (3 / 4),
+                alpha=0.3,
+            )
+        else:
+            merged_data = pd.merge(
+                baseline_data,
+                method_data,
+                how="outer",
+                on=merge_cols,
+                suffixes=("_baseline", "_method"),
+                indicator=True,
+            )
+            both = merged_data[merged_data["_merge"] == "both"]
+
+            # Baseline will have scored it
+            both_scored = both[both["is_scored_baseline"] & both["is_scored_method"]]
+            method_only = merged_data[merged_data["_merge"] == "right_only"]
+            method_only_scored = method_only[method_only["is_scored_method"]]
+            method_only_not_scored = method_only[~method_only["is_scored_method"]]
+
+            g.ax_joint.scatter(
+                data=method_only_not_scored,
+                x="emb-x_method",
+                y="emb-y_method",
+                color=COLORS[_method],
+                marker=".",
+                edgecolors="black",
+                s=MARKER_SIZE**2 * (3 / 4),
+                alpha=0.3,
+            )
+            g.ax_joint.scatter(
+                data=both_scored,
+                x="emb-x_baseline",
+                y="emb-y_baseline",
+                color=COLORS["both"],
+                marker=MARKERS["both"],
+                s=MARKER_SIZE**2,
+                edgecolors="black",
+                label="Both",
+                alpha=0.7,
+            )
+            g.ax_joint.scatter(
+                data=method_only_scored,
+                x="emb-x_method",
+                y="emb-y_method",
+                color=COLORS[_method],
+                marker=MARKERS[_method],
+                edgecolors="black",
+                s=MARKER_SIZE**2,
+                alpha=0.7,
+            )
+
+        g.ax_joint.scatter(
+            data=surface.data.loc[border_df.index],
+            x="emb-x",
+            y="emb-y",
+            color="grey",
+            marker="x",
+            alpha=0.2,
+            s=MARKER_SIZE,
+        )
+
+        g.ax_joint.set_xlabel("")
+        g.ax_joint.set_ylabel("")
+        g.ax_joint.set_xticks([])
+        g.ax_joint.set_xticklabels([])
+        g.ax_joint.set_yticks([])
+        g.ax_joint.set_yticklabels([])
+
+        for ax in [g.ax_marg_x, g.ax_marg_y, g.ax_joint]:
+            ax.tick_params(
+                axis="both",  # changes apply to the x-axis
+                which="both",  # both major and minor ticks are affected
+                bottom=False,  # ticks along the bottom edge are off
+                top=False,  # ticks along the top edge are off
+                left=False,  # ticks along the left edge are off
+                right=False,  # ticks along the right edge are off
+                labelbottom=False,
+            )  # labels along the bottom edge are off
+
+        g.figure.tight_layout(h_pad=0, w_pad=0, pad=1.00)
+        grids.append(g)
 
     # Place legend in top right of figure
-    g.figure.legend(
+    fig = plt.figure(figsize=(args.figsize * len(args.methods) + 1, args.figsize))
+    gridsp = matplotlib.gridspec.GridSpec(1, len(args.methods) + 1)
+
+    [SeabornFig2Grid(g, fig, gridsp[i]) for i, g in enumerate(grids)]
+    fig.legend(
         loc="upper right",
         bbox_to_anchor=(0.98, 0.98),
         fontsize=LEGEND_FONTSIZE,
         handles=legend_markers,
     )
+    gridsp.tight_layout(fig)
+    plt.show()
 
     for ext in ["png", "pdf"]:
         plt.savefig(f"{args.outpath}.{ext}", bbox_inches="tight", dpi=300)
