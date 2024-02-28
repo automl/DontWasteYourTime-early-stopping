@@ -30,10 +30,12 @@ if TYPE_CHECKING:
 EXP_NAME: TypeAlias = Literal[
     "debug",
     "time-analysis",
+    "category3-nsplits-2-5",
     "category3-nsplits-20",
     "category3-nsplits-10",
     "category3-nsplits-5",
     "category3-nsplits-3",
+    "category4-nsplits-2-5",
     "category4-nsplits-20",
     "category4-nsplits-10",
     "category4-nsplits-5",
@@ -47,11 +49,13 @@ EXP_CHOICES = [
     "debug",
     "time-analysis",
     # -------
+    "category3-nsplits-2-5",  # MLP pipeline (2 repeat, 5 fold)
     "category3-nsplits-20",  # MLP pipeline (2 repeat, 10 fold)
     "category3-nsplits-10",  # MLP pipeline
     "category3-nsplits-5",  # MLP pipeline
     "category3-nsplits-3",  # MLP pipeline
     # -------
+    "category4-nsplits-2-5",  # RF pipeline (2 repeat, 5 fold)
     "category4-nsplits-20",  # RF pipeline (2 repeat, 10 fold)
     "category4-nsplits-10",  # RF pipeline
     "category4-nsplits-5",  # RF pipeline
@@ -113,6 +117,7 @@ def exp_name_to_result_dir(exp_name: EXP_NAME) -> Path:
             | "category3-nsplits-10"
             | "category3-nsplits-5"
             | "category3-nsplits-3"
+            | "category3-nsplits-2-5"
         ):
             return Path("results-category3").resolve()
         case (
@@ -120,6 +125,7 @@ def exp_name_to_result_dir(exp_name: EXP_NAME) -> Path:
             | "category4-nsplits-5"
             | "category4-nsplits-3"
             | "category4-nsplits-20"
+            | "category4-nsplits-2-5"
         ):
             return Path("results-category4").resolve()
         case "category5-nsplits-10" | "category5-nsplits-20":
@@ -162,6 +168,13 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             time_seconds = 4 * 60 * 60
             suite = TASKS["amlb_classification_full"]
             methods = ["disabled"]
+        case "category3-nsplits-2-5":
+            n_splits = [-5]  # This is a hack to run 2 repeats of 5 fold cv (sorry)
+            methods = [
+                "disabled",
+                "current_average_worse_than_best_worst_split",
+                "current_average_worse_than_mean_best",
+            ]
         case "category3-nsplits-20":
             n_splits = [20]
             methods = [
@@ -199,6 +212,14 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                 "current_average_worse_than_mean_best",
                 "robust_std_top_3",
                 "robust_std_top_5",
+            ]
+        case "category4-nsplits-2-5":
+            n_splits = [-5]  # This is a hack to run 2 repeats of 5 fold cv (sorry)
+            pipeline = "rf_classifier"
+            methods = [
+                "disabled",
+                "current_average_worse_than_best_worst_split",
+                "current_average_worse_than_mean_best",
             ]
         case "category4-nsplits-20":
             n_splits = [20]
