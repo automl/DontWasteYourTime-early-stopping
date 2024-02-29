@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --partition=bosch_cpu-cascadelake
+#SBATCH --partition=ANON REPLACE ME
 #SBATCH --mem=30G
 #SBATCH --time=00:30:00
 #SBATCH --cpus-per-task=1

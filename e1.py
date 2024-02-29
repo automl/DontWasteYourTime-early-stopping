@@ -970,7 +970,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
                     array.submit(
                         name=args.expname,
                         slurm_headers={
-                            "partition": "bosch_cpu-cascadelake",
+                            "partition": "ANON REPLACE ME",
                             "mem": f"{first.memory_gb}G",
                             "time": seconds_to_slurm_time(
                                 int(5 * 60 + first.time_seconds * 1.5),
@@ -981,7 +981,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
                         },
                         python=None,  # Set explicitly if required.
                         script_dir=result_dir / "slurm-scripts",
-                        sbatch=["sbatch", "--bosch"],
+                        sbatch=["sbatch"],
                         limit=1,
                     )
                 case "run":
