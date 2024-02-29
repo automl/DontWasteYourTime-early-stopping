@@ -1222,7 +1222,7 @@ def speedup_plots(  # noqa: PLR0913
         ax.hlines(
             y_ticks,
             xmin=np.zeros(len(y_ticks)),
-            xmax=mm_["min"],
+            xmax=bttb_,
             linestyle="dashed",
             linewidth=1,
             color="grey",
@@ -1264,12 +1264,12 @@ def speedup_plots(  # noqa: PLR0913
             }
             ax.scatter(x=_mttbb, y=y_ticks, zorder=2, **_style)
 
-            rng = np.random.default_rng(0)
+            rng = np.random.default_rng(_i)
             jitter_y = rng.uniform(-0.25, 0.25)
 
             # We also mark where a method failed, bit manual but it works
             for _tick, mttbb_single in zip(y_ticks, _mttbb, strict=True):
-                # We place a slight jitter on the x-axis so that we can see the points
+                # We place a slight jitter on the y-axis so that we can see the points
                 # if they overlap
                 if np.isnan(mttbb_single):
                     ax.scatter(
