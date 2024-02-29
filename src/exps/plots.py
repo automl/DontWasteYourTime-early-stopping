@@ -685,8 +685,10 @@ def incumbent_traces_aggregated_no_test(  # noqa: PLR0913, C901
     )
     legend_lines = []
 
+    all_axs = axs.flatten() if isinstance(axs, np.ndarray) else [axs]
+
     for i, ((ax_title, df), ax) in enumerate(
-        zip(dfs.items(), axs.flatten(), strict=True),
+        zip(dfs.items(), all_axs, strict=True),
     ):
 
         def incumbent_trace(_x: pd.DataFrame) -> pd.Series:

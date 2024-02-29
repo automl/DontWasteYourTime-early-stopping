@@ -6,7 +6,17 @@ dependencies = [
   "matplotlib",   # Better iteration
   "openml",       # Used for process termination of executors
   "scikit-learn",
+  "pyQt5",
   "smac",
+  "seaborn",
+  "pandas",
+  "rich",
+  "ConfigSpace",
+  "numpy",
+  "more-itertools",
+  "typing_extensions",
+  "scipy",
+  "pyQT6",
 ]
 requires-python = ">=3.10"
 authors = [{ name = "Eddie Bergman", email = "eddiebergmanhs@gmail.com" }]

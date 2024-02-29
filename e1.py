@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 EXP_NAME: TypeAlias = Literal[
     "debug",
+    "reproduce",
     "time-analysis",
     "category3-nsplits-2-5",
     "category3-nsplits-20",
@@ -49,6 +50,7 @@ EXP_NAME: TypeAlias = Literal[
 ]
 EXP_CHOICES = [
     "debug",
+    "reproduce",
     "time-analysis",
     # -------
     "category3-nsplits-2-5",  # MLP pipeline (2 repeat, 5 fold)
@@ -115,6 +117,8 @@ def exp_name_to_result_dir(exp_name: EXP_NAME) -> Path:
     # Unfortunatly I bundled some experiments into the same directory, this just maps
     # them to where the results for a specific experiment are actually stored.
     match exp_name:
+        case "reproduce":
+            return Path("results-reproduce").resolve()
         case "time-analysis":
             return Path("results-time-analysis").resolve()
         case (
@@ -166,6 +170,17 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
     methods: list[str]
 
     match name:
+        case "reproduce":
+            n_splits = [10]
+            n_cpu = 4
+            suite = [146818, 146820]
+            time_seconds = 30
+            folds = [0, 1]
+            methods = [
+                "disabled",
+                "current_average_worse_than_best_worst_split",
+                "current_average_worse_than_mean_best",
+            ]
         case "time-analysis":
             # This suite runs the full automlbenchmark with our maximum cv splits, such
             # that we can see how many trials can be evaluated in a given time frame.
@@ -709,9 +724,9 @@ def main():  # noqa: C901, PLR0915, PLR0912
             baseline = "disabled"  # Used for speedups
 
         match len(_dfs):
-            case 2:
+            case 1 | 2 | 3:
                 nrows = 1
-            case 6:
+            case 4 | 5 | 6:
                 nrows = 2
             case _:
                 raise ValueError("Not handled.")
