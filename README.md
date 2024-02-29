@@ -30,6 +30,10 @@ If you're using a slurm cluster, you can use the following instead:
 python e1.py submit --expname reproduce
 ```
 
+If you're going to be running many experiments in parallel on the cluster, we advise
+you to use the `download.py` script to first download the openml data to prevent races and
+data corruption.
+
 Please see `python e1.py --help` for more.
 
 ## Getting the status of the experiments
