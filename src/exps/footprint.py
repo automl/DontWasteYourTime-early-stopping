@@ -1,5 +1,3 @@
-# TODO: Metric should be converted to worst for Y, seems normalized cost
-# TODO Seems that X values need to be imputed.
 # ruff: noqa: PD901, PD015
 from __future__ import annotations
 
@@ -34,6 +32,8 @@ from exps.plots import (
     RENAMES,
 )
 from exps.seaborn2fig import SeabornFig2Grid
+
+LEG_MARKER = 25
 
 if TYPE_CHECKING:
     from ConfigSpace import ConfigurationSpace
@@ -163,10 +163,9 @@ class MDSSurface:
 
         X = training_data[["emb-x", "emb-y"]]
         y = training_data[metric_col].copy()
+        y = y.fillna(fillna)
         if normalize:
             y = (y - y.min()) / (y.max() - y.min())
-
-        y = y.fillna(fillna)
 
         if model is None:
             _model = RandomForestRegressor(random_state=random_state, n_estimators=1000)
@@ -470,6 +469,7 @@ def main():
     parser.add_argument("--pipeline", type=str, choices=["mlp", "rf"], default="mlp")
     parser.add_argument("--granularity", type=int, default=30)
     parser.add_argument("--max-iter", type=int, default=100)
+    parser.add_argument("--ignore-too-many-configs", action="store_true")
     parser.add_argument(
         "--metric",
         type=str,
@@ -547,6 +547,11 @@ def main():
         [baseline_data, support_df, *method_datas, border_df],
         names=["method", "fold", "trial"],
     )
+    if len(X) > 4000 and not args.ignore_too_many_configs:  # noqa: PLR2004
+        raise ValueError(
+            f"Too many configs {len(X)} for {args}, please choose another dataset"
+            "or use --ignore-too-many-configs",
+        )
 
     # We can't drop duplicates as we need to keep indices for later indexing,
     # this will make MDS work a little harder to produce it's embedding as a consequence.
@@ -562,11 +567,15 @@ def main():
         },
     )
     real_data = surface.data.loc[df.index]
+    best_point = real_data[
+        real_data[args.metric] == real_data[args.metric].max()
+    ].drop_duplicates()
+    worst_score = real_data[args.metric].min()
 
     # Create performance heatmap
     perf_model = surface.performance_model(
         metric_col=args.metric,
-        fillna=0,
+        fillna=worst_score,
         normalize=True,
     )
     perf_x, perf_y, perf_z = surface.heatmap(
@@ -584,13 +593,13 @@ def main():
     area_z[area_z < 0.8] = 0  # noqa: PLR2004
 
     legend_markers = [
-        leg(marker="x", color="black", label="Border", markersize=MARKER_SIZE / 2),
+        leg(marker="x", color="black", label="Border", markersize=LEG_MARKER * 3 / 4),
         leg(
             markeredgecolor="black",
             marker=MARKERS[args.baseline],
             color=COLORS[args.baseline],
             label=RENAMES.get(args.baseline, args.baseline),
-            markersize=MARKER_SIZE / 2,
+            markersize=LEG_MARKER,
         ),
         # leg(
         # markeredgecolor="black",
@@ -602,21 +611,21 @@ def main():
     ]
     for method in args.methods:
         METHOD_NAME = RENAMES.get(method, method)
-        EARLY_STOPPED_LABEL = f"{METHOD_NAME} (ES)"
+        EARLY_STOPPED_LABEL = f"{METHOD_NAME} (Stopped)"
         legend_markers.extend(
             [
                 leg(
                     marker=".",
                     color=COLORS[method],
                     label=EARLY_STOPPED_LABEL,
-                    markersize=MARKER_SIZE / 2,
+                    markersize=LEG_MARKER,
                 ),
                 leg(
                     markeredgecolor="black",
                     marker=MARKERS[method],
                     color=COLORS[method],
                     label=METHOD_NAME,
-                    markersize=MARKER_SIZE / 2,
+                    markersize=LEG_MARKER,
                 ),
             ],
         )
@@ -702,6 +711,9 @@ def main():
         baseline_data = _data.xs(args.baseline, drop_level=False)[select_cols]
         method_data = _data.xs(_method, drop_level=False)[select_cols]
 
+        print(best_point)
+        print(best_point[[*config_cols, args.metric]])
+
         if _method == args.baseline:
             baseline_scored = baseline_data[baseline_data["is_scored"]]
             g.ax_joint.scatter(
@@ -711,6 +723,7 @@ def main():
                 color=COLORS[_method],
                 marker=MARKERS[_method],
                 edgecolors="black",
+                label=RENAMES.get(_method, _method),
                 s=MARKER_SIZE**2,
             )
         else:
@@ -738,6 +751,7 @@ def main():
                 color=COLORS[_method],
                 marker=".",
                 # edgecolors="black",
+                label=f"{RENAMES.get(_method, _method)} (Stopped)",
                 alpha=0.7,
                 s=MARKER_SIZE**2 * (3 / 4),
             )
@@ -748,6 +762,7 @@ def main():
                 color=COLORS[_method],
                 marker=MARKERS[_method],
                 edgecolors="black",
+                label=RENAMES.get(_method, _method),
                 s=MARKER_SIZE**2,
             )
             """
@@ -778,6 +793,29 @@ def main():
             color="grey",
             marker="x",
             s=MARKER_SIZE,
+        )
+        g.ax_joint.scatter(
+            data=best_point,
+            x="emb-x",
+            y="emb-y",
+            color="none",
+            marker="o",
+            linewidths=2,
+            label="Best",
+            edgecolors="red",
+            s=MARKER_SIZE**3,
+            zorder=1,
+        )
+        g.ax_joint.scatter(
+            data=best_point,
+            x="emb-x",
+            y="emb-y",
+            color="red",
+            marker="X",
+            label="Best",
+            edgecolors="black",
+            s=MARKER_SIZE,
+            zorder=1,
         )
 
         g.ax_joint.set_xlabel("")
@@ -820,14 +858,23 @@ def main():
     [SeabornFig2Grid(g, fig, gridsp[i]) for i, g in enumerate(grids)]
     # Place legends below and center
     # Not sure why this is just so much bigger than everything else
-    # fig.legend(
-    # loc="upper center",
-    # bbox_to_anchor=(0, -0.2),
-    # fontsize="x-small",
-    # handles=legend_markers,
-    # ncol=len(legend_markers) // 2,
-    # )
+    legend_markers.append(
+        leg(
+            markeredgecolor="red",
+            marker="o",
+            color="none",
+            label="Best",
+            markersize=LEG_MARKER,
+        ),
+    )
     fig.tight_layout(pad=1, w_pad=0, h_pad=0)
+    fig.legend(
+        loc="lower left",
+        bbox_to_anchor=(0.011, 1.36),
+        fontsize=LEG_MARKER,
+        handles=legend_markers,
+        ncol=len(legend_markers),
+    )
     for ext in ["png", "pdf"]:
         fig.savefig(f"{args.outpath}.{ext}", bbox_inches="tight", dpi=300)
 

@@ -498,18 +498,13 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                     opt_methods,
                 )
             ]
-
         case "debug":
-            n_splits = [3]
+            n_splits = [10]
             folds = [0]
-            time_seconds = 30
-            optimizers = [
-                "smac",
-                "smac_early_stop_as_failed",
-                "smac_early_stop_with_fold_mean",
-            ]
-            methods = ["current_average_worse_than_best_worst_split"]
-            suite = TASKS["debug"]
+            time_seconds = 300
+            methods = ["disabled"]
+            n_cpu = 1
+            suite = [359993]
         case _:
             raise ValueError(f"Unknown experiment set: {name}")
 
@@ -550,6 +545,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
 
     with cmds("run") as p:
         p.add_argument("--expname", choices=EXP_CHOICES, type=str, required=True)
+        p.add_argument("--dry", action="store_true")
         p.add_argument(
             "--overwrite-by",
             choices=["failed", "running", "pending", "success", "submitted"],

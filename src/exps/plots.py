@@ -12,6 +12,21 @@ import pandas as pd
 from matplotlib.lines import Line2D
 from more_itertools import batched, first_true
 
+"""
+# TODO: Turns this into a dedicated plot thing ...
+In [92]: dfs = {
+    ...:     (n, m): (
+    ...:         pd.read_parquet(f"data/{m}-nsplits-{n}.parquet", columns=cols_needed_for_plotting(metric, n)).
+    ...:         set_index(["setting:cv_early_stop_strategy", "setting:task", "setting:fold"])
+    ...:         .sort_index()["status"]
+    ...:         .groupby([method, "setting:task", "setting:fold"], observed=True)
+    ...:         .value_counts()
+    ...:         .loc[["disabled", "current_average_worse_than_best_worst_split", "current_average_worse_than_mean_best"]]
+    ...:     )
+    ...:     for m, n in product(models, n_splits)
+    ...: }
+"""
+
 _colors = iter(plt.get_cmap("tab10").colors)  # type: ignore
 MARKER_SIZE = 10
 LEGEND_MAX_COLS = 5
@@ -56,9 +71,10 @@ MARKERS = {
     "disabled": "o",
     "current_average_worse_than_mean_best": "h",
     "current_average_worse_than_best_worst_split": "H",
-    "robust_std_top_3": "X",
+    "robust_std_top_3": "D",
     "robust_std_top_5": "P",
     "both": "s",
+    "best": "X",
     # --- #
 }
 MARKERS.update(
@@ -1204,7 +1220,7 @@ def speedup_plots(  # noqa: PLR0913
         ax.hlines(
             y_ticks,
             xmin=np.zeros(len(y_ticks)),
-            xmax=mm_["max"],
+            xmax=mm_["min"],
             linestyle="dashed",
             linewidth=1,
             color="grey",
@@ -1212,7 +1228,7 @@ def speedup_plots(  # noqa: PLR0913
         )
         ax.hlines(
             y_ticks,
-            xmin=mm_["max"],
+            xmin=mm_["min"],
             xmax=bttb_,
             linestyle="solid",
             linewidth=1,
@@ -1288,6 +1304,17 @@ def speedup_plots(  # noqa: PLR0913
             linestyle="",
             marker="x",
             color="black",
+        ),
+    )
+    legend_lines.append(
+        Line2D(
+            [0],
+            [0],
+            label="Speedup to Baseline",
+            markersize=MARKER_SIZE * 3 / 4,
+            marker="<",
+            color="black",
+            markeredgecolor="black",
         ),
     )
 
