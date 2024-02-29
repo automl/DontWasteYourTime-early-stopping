@@ -645,10 +645,19 @@ def main():  # noqa: C901, PLR0915, PLR0912
 
         args.outpath.mkdir(parents=True, exist_ok=True)
 
+        _n_splits_titles = {
+            -5: "2 Repeated 5-Fold",
+            20: "2 Repeated 10-Fold",
+        }
+        nsplits_title = lambda n_splits: _n_splits_titles.get(
+            n_splits,
+            f"{n_splits}-Fold",
+        )
+
         metric = METRICS[args.metric]
         time_limit = args.time_limit
         _dfs = {
-            f"{model.upper()}, {n_splits} CV": pd.read_parquet(
+            f"{model.upper()}, {nsplits_title(n_splits)} CV": pd.read_parquet(
                 path,
                 columns=cols_needed_for_plotting(metric, n_splits),
             )
@@ -665,14 +674,12 @@ def main():  # noqa: C901, PLR0915, PLR0912
         # Quick sanity check...
         for key, _df in _dfs.items():
             model = "rf_classifier" if "RF" in key else "mlp_classifier"
-            n_splits = int(key.split(",")[1].split()[0])
             assert _df["setting:task"].nunique() == N_DATASETS
-            assert (_df["setting:n_splits"] == n_splits).all()
             assert list(_df["setting:pipeline"].unique()) == [model]
 
         _dfs = {
-            n_splits: _df[_df["setting:cv_early_stop_strategy"].isin(args.methods)]
-            for n_splits, _df in _dfs.items()
+            axis_title: _df[_df["setting:cv_early_stop_strategy"].isin(args.methods)]
+            for axis_title, _df in _dfs.items()
         }
 
         title = f"Incumbent Traces, {N_DATASETS} Datasets"

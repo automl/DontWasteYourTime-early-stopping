@@ -235,10 +235,18 @@ def run_it(run: E1) -> None:
     # This is a bit of hack but we don't do 20 CV, we do it
     # as 2 cross 10
     if run.n_splits == 20:  # noqa: PLR2004
-        splitter = RepeatedStratifiedKFold(n_splits=2, n_repeats=10)
+        splitter = RepeatedStratifiedKFold(
+            n_splits=2,
+            n_repeats=10,
+            random_state=run.experiment_seed + run.fold,
+        )
     elif run.n_splits == -5:  # noqa: PLR2004
         # This is a hack to do 2 CV 5 times
-        splitter = RepeatedStratifiedKFold(n_splits=2, n_repeats=5)
+        splitter = RepeatedStratifiedKFold(
+            n_splits=2,
+            n_repeats=5,
+            random_state=run.experiment_seed + run.fold,
+        )
     else:
         splitter = "cv"
 
