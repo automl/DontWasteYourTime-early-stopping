@@ -1,0 +1,428 @@
+{
+  "2073": {
+    "dataset_id": 181,
+    "n_features": 9.0,
+    "n_instances": 1484.0,
+    "cell_size": 13356.0
+  },
+  "3945": {
+    "dataset_id": 1111,
+    "n_features": 231.0,
+    "n_instances": 50000.0,
+    "cell_size": 11550000.0
+  },
+  "7593": {
+    "dataset_id": 1596,
+    "n_features": 55.0,
+    "n_instances": 581012.0,
+    "cell_size": 31955660.0
+  },
+  "10090": {
+    "dataset_id": 1457,
+    "n_features": 10001.0,
+    "n_instances": 1500.0,
+    "cell_size": 15001500.0
+  },
+  "146818": {
+    "dataset_id": 40981,
+    "n_features": 15.0,
+    "n_instances": 690.0,
+    "cell_size": 10350.0
+  },
+  "146820": {
+    "dataset_id": 40983,
+    "n_features": 6.0,
+    "n_instances": 4839.0,
+    "cell_size": 29034.0
+  },
+  "167120": {
+    "dataset_id": 23517,
+    "n_features": 22.0,
+    "n_instances": 96320.0,
+    "cell_size": 2119040.0
+  },
+  "168350": {
+    "dataset_id": 1489,
+    "n_features": 6.0,
+    "n_instances": 5404.0,
+    "cell_size": 32424.0
+  },
+  "168757": {
+    "dataset_id": 31,
+    "n_features": 21.0,
+    "n_instances": 1000.0,
+    "cell_size": 21000.0
+  },
+  "168784": {
+    "dataset_id": 40982,
+    "n_features": 28.0,
+    "n_instances": 1941.0,
+    "cell_size": 54348.0
+  },
+  "168868": {
+    "dataset_id": 41138,
+    "n_features": 171.0,
+    "n_instances": 76000.0,
+    "cell_size": 12996000.0
+  },
+  "168909": {
+    "dataset_id": 41163,
+    "n_features": 2001.0,
+    "n_instances": 10000.0,
+    "cell_size": 20010000.0
+  },
+  "168910": {
+    "dataset_id": 41164,
+    "n_features": 801.0,
+    "n_instances": 8237.0,
+    "cell_size": 6597837.0
+  },
+  "168911": {
+    "dataset_id": 41143,
+    "n_features": 145.0,
+    "n_instances": 2984.0,
+    "cell_size": 432680.0
+  },
+  "189354": {
+    "dataset_id": 1169,
+    "n_features": 8.0,
+    "n_instances": 539383.0,
+    "cell_size": 4315064.0
+  },
+  "189355": {
+    "dataset_id": 41167,
+    "n_features": 61.0,
+    "n_instances": 416188.0,
+    "cell_size": 25387468.0
+  },
+  "189356": {
+    "dataset_id": 41147,
+    "n_features": 79.0,
+    "n_instances": 425240.0,
+    "cell_size": 33593960.0
+  },
+  "189922": {
+    "dataset_id": 41158,
+    "n_features": 971.0,
+    "n_instances": 3153.0,
+    "cell_size": 3061563.0
+  },
+  "190137": {
+    "dataset_id": 1487,
+    "n_features": 73.0,
+    "n_instances": 2534.0,
+    "cell_size": 184982.0
+  },
+  "190146": {
+    "dataset_id": 54,
+    "n_features": 19.0,
+    "n_instances": 846.0,
+    "cell_size": 16074.0
+  },
+  "190392": {
+    "dataset_id": 41144,
+    "n_features": 260.0,
+    "n_instances": 3140.0,
+    "cell_size": 816400.0
+  },
+  "190410": {
+    "dataset_id": 41145,
+    "n_features": 309.0,
+    "n_instances": 5832.0,
+    "cell_size": 1802088.0
+  },
+  "190411": {
+    "dataset_id": 41156,
+    "n_features": 49.0,
+    "n_instances": 4147.0,
+    "cell_size": 203203.0
+  },
+  "190412": {
+    "dataset_id": 41157,
+    "n_features": 10001.0,
+    "n_instances": 100.0,
+    "cell_size": 1000100.0
+  },
+  "211979": {
+    "dataset_id": 41168,
+    "n_features": 55.0,
+    "n_instances": 83733.0,
+    "cell_size": 4605315.0
+  },
+  "211986": {
+    "dataset_id": 4541,
+    "n_features": 50.0,
+    "n_instances": 101766.0,
+    "cell_size": 5088300.0
+  },
+  "359953": {
+    "dataset_id": 1515,
+    "n_features": 1301.0,
+    "n_instances": 571.0,
+    "cell_size": 742871.0
+  },
+  "359954": {
+    "dataset_id": 188,
+    "n_features": 20.0,
+    "n_instances": 736.0,
+    "cell_size": 14720.0
+  },
+  "359955": {
+    "dataset_id": 1464,
+    "n_features": 5.0,
+    "n_instances": 748.0,
+    "cell_size": 3740.0
+  },
+  "359956": {
+    "dataset_id": 1494,
+    "n_features": 42.0,
+    "n_instances": 1055.0,
+    "cell_size": 44310.0
+  },
+  "359957": {
+    "dataset_id": 1468,
+    "n_features": 857.0,
+    "n_instances": 1080.0,
+    "cell_size": 925560.0
+  },
+  "359958": {
+    "dataset_id": 1049,
+    "n_features": 38.0,
+    "n_instances": 1458.0,
+    "cell_size": 55404.0
+  },
+  "359959": {
+    "dataset_id": 23,
+    "n_features": 10.0,
+    "n_instances": 1473.0,
+    "cell_size": 14730.0
+  },
+  "359960": {
+    "dataset_id": 40975,
+    "n_features": 7.0,
+    "n_instances": 1728.0,
+    "cell_size": 12096.0
+  },
+  "359961": {
+    "dataset_id": 12,
+    "n_features": 217.0,
+    "n_instances": 2000.0,
+    "cell_size": 434000.0
+  },
+  "359962": {
+    "dataset_id": 1067,
+    "n_features": 22.0,
+    "n_instances": 2109.0,
+    "cell_size": 46398.0
+  },
+  "359963": {
+    "dataset_id": 40984,
+    "n_features": 20.0,
+    "n_instances": 2310.0,
+    "cell_size": 46200.0
+  },
+  "359964": {
+    "dataset_id": 40670,
+    "n_features": 181.0,
+    "n_instances": 3186.0,
+    "cell_size": 576666.0
+  },
+  "359965": {
+    "dataset_id": 3,
+    "n_features": 37.0,
+    "n_instances": 3196.0,
+    "cell_size": 118252.0
+  },
+  "359966": {
+    "dataset_id": 40978,
+    "n_features": 1559.0,
+    "n_instances": 3279.0,
+    "cell_size": 5111961.0
+  },
+  "359967": {
+    "dataset_id": 4134,
+    "n_features": 1777.0,
+    "n_instances": 3751.0,
+    "cell_size": 6665527.0
+  },
+  "359968": {
+    "dataset_id": 40701,
+    "n_features": 21.0,
+    "n_instances": 5000.0,
+    "cell_size": 105000.0
+  },
+  "359969": {
+    "dataset_id": 1475,
+    "n_features": 52.0,
+    "n_instances": 6118.0,
+    "cell_size": 318136.0
+  },
+  "359970": {
+    "dataset_id": 4538,
+    "n_features": 33.0,
+    "n_instances": 9873.0,
+    "cell_size": 325809.0
+  },
+  "359971": {
+    "dataset_id": 4534,
+    "n_features": 31.0,
+    "n_instances": 11055.0,
+    "cell_size": 342705.0
+  },
+  "359972": {
+    "dataset_id": 41146,
+    "n_features": 21.0,
+    "n_instances": 5124.0,
+    "cell_size": 107604.0
+  },
+  "359973": {
+    "dataset_id": 41142,
+    "n_features": 1637.0,
+    "n_instances": 5418.0,
+    "cell_size": 8869266.0
+  },
+  "359974": {
+    "dataset_id": 40498,
+    "n_features": 12.0,
+    "n_instances": 4898.0,
+    "cell_size": 58776.0
+  },
+  "359975": {
+    "dataset_id": 40900,
+    "n_features": 37.0,
+    "n_instances": 5100.0,
+    "cell_size": 188700.0
+  },
+  "359976": {
+    "dataset_id": 40996,
+    "n_features": 785.0,
+    "n_instances": 70000.0,
+    "cell_size": 54950000.0
+  },
+  "359977": {
+    "dataset_id": 40668,
+    "n_features": 43.0,
+    "n_instances": 67557.0,
+    "cell_size": 2904951.0
+  },
+  "359979": {
+    "dataset_id": 4135,
+    "n_features": 10.0,
+    "n_instances": 32769.0,
+    "cell_size": 327690.0
+  },
+  "359980": {
+    "dataset_id": 1486,
+    "n_features": 119.0,
+    "n_instances": 34465.0,
+    "cell_size": 4101335.0
+  },
+  "359981": {
+    "dataset_id": 41027,
+    "n_features": 7.0,
+    "n_instances": 44819.0,
+    "cell_size": 313733.0
+  },
+  "359982": {
+    "dataset_id": 1461,
+    "n_features": 17.0,
+    "n_instances": 45211.0,
+    "cell_size": 768587.0
+  },
+  "359983": {
+    "dataset_id": 1590,
+    "n_features": 15.0,
+    "n_instances": 48842.0,
+    "cell_size": 732630.0
+  },
+  "359984": {
+    "dataset_id": 41169,
+    "n_features": 28.0,
+    "n_instances": 65196.0,
+    "cell_size": 1825488.0
+  },
+  "359985": {
+    "dataset_id": 41166,
+    "n_features": 181.0,
+    "n_instances": 58310.0,
+    "cell_size": 10554110.0
+  },
+  "359986": {
+    "dataset_id": 41165,
+    "n_features": 7201.0,
+    "n_instances": 10000.0,
+    "cell_size": 72010000.0
+  },
+  "359987": {
+    "dataset_id": 40685,
+    "n_features": 10.0,
+    "n_instances": 58000.0,
+    "cell_size": 580000.0
+  },
+  "359988": {
+    "dataset_id": 41159,
+    "n_features": 4297.0,
+    "n_instances": 20000.0,
+    "cell_size": 85940000.0
+  },
+  "359989": {
+    "dataset_id": 41161,
+    "n_features": 4297.0,
+    "n_instances": 20000.0,
+    "cell_size": 85940000.0
+  },
+  "359990": {
+    "dataset_id": 41150,
+    "n_features": 51.0,
+    "n_instances": 130064.0,
+    "cell_size": 6633264.0
+  },
+  "359991": {
+    "dataset_id": 41162,
+    "n_features": 33.0,
+    "n_instances": 72983.0,
+    "cell_size": 2408439.0
+  },
+  "359992": {
+    "dataset_id": 42733,
+    "n_features": 12.0,
+    "n_instances": 39948.0,
+    "cell_size": 479376.0
+  },
+  "359993": {
+    "dataset_id": 42734,
+    "n_features": 20.0,
+    "n_instances": 50789.0,
+    "cell_size": 1015780.0
+  },
+  "359994": {
+    "dataset_id": 42732,
+    "n_features": 9.0,
+    "n_instances": 2215023.0,
+    "cell_size": 19935207.0
+  },
+  "360112": {
+    "dataset_id": 42746,
+    "n_features": 42.0,
+    "n_instances": 4898431.0,
+    "cell_size": 205734102.0
+  },
+  "360113": {
+    "dataset_id": 42742,
+    "n_features": 58.0,
+    "n_instances": 595212.0,
+    "cell_size": 34522296.0
+  },
+  "360114": {
+    "dataset_id": 42769,
+    "n_features": 29.0,
+    "n_instances": 1000000.0,
+    "cell_size": 29000000.0
+  },
+  "360975": {
+    "dataset_id": 43072,
+    "n_features": 14892.0,
+    "n_instances": 50000.0,
+    "cell_size": 744600000.0
+  }
+}
