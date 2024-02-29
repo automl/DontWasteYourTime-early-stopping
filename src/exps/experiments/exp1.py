@@ -16,7 +16,7 @@ from amltk.sklearn.voting import voting_with_preffited_estimators
 from amltk.store import PathBucket
 from sklearn.ensemble import VotingClassifier, VotingRegressor
 from sklearn.metrics._scorer import _MultimetricScorer
-from sklearn.model_selection import RepeatedStratifiedKFold
+from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 
 from exps.methods import METHODS
 from exps.metrics import METRICS
@@ -45,6 +45,13 @@ class E1(Slurmable):
         ),
     )
     # -- task
+    seeded_inner_cv: bool = field(
+        default=True,
+        metadata=Arg(
+            help="Seed the inner CV",
+            group="task-extra",
+        ),
+    )
     task: int = field(
         metadata=Arg(
             help="OpenML task id",
@@ -232,23 +239,29 @@ def run_it(run: E1) -> None:
     metric = METRICS[run.metric]
     cv_early_stopping_method = METHODS[run.cv_early_stop_strategy]
 
+    inner_cv_seed = run.experiment_seed + run.fold if run.seeded_inner_cv else None
+
     # This is a bit of hack but we don't do 20 CV, we do it
     # as 2 cross 10
     if run.n_splits == 20:  # noqa: PLR2004
         splitter = RepeatedStratifiedKFold(
             n_splits=2,
             n_repeats=10,
-            random_state=run.experiment_seed + run.fold,
+            random_state=inner_cv_seed,
         )
     elif run.n_splits == -5:  # noqa: PLR2004
         # This is a hack to do 2 CV 5 times
         splitter = RepeatedStratifiedKFold(
             n_splits=2,
             n_repeats=5,
-            random_state=run.experiment_seed + run.fold,
+            random_state=inner_cv_seed,
         )
     else:
-        splitter = "cv"
+        splitter = StratifiedKFold(
+            n_splits=run.n_splits,
+            random_state=inner_cv_seed,
+            shuffle=True,
+        )
 
     evaluator = CVEvaluation(
         X,

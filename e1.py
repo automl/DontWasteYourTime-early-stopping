@@ -44,6 +44,8 @@ EXP_NAME: TypeAlias = Literal[
     "category5-nsplits-20",
     "category6-nsplits-10",
     "category6-nsplits-20",
+    "category7-nsplits-20-unseeded",
+    "category8-nsplits-20-unseeded",
 ]
 EXP_CHOICES = [
     "debug",
@@ -66,6 +68,9 @@ EXP_CHOICES = [
     # -------
     "category6-nsplits-10",  # {Default SMAC, SMAC w/ early stop mean report} RF
     "category6-nsplits-20",  # {Default SMAC, SMAC w/ early stop mean report} RF
+    # ---
+    "category7-nsplits-20-unseeded",  # MLP pipeline (2 repeat, 10 fold) (unseeded inner)
+    "category8-nsplits-20-unseeded",  # RF pipeline (2 repeat, 10 fold) (unseeded inner)
 ]
 
 
@@ -144,6 +149,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
     folds = list(range(10))
     mem_per_cpu_gb = 5
     n_cpu = 4
+    seeded_inner_cv = True
     metric = "roc_auc_ovr"
     pipeline = "mlp_classifier"
     experiment_fixed_seed = 42
@@ -175,14 +181,20 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                 "current_average_worse_than_best_worst_split",
                 "current_average_worse_than_mean_best",
             ]
+        case "category7-nsplits-20-unseeded":
+            n_splits = [20]
+            seeded_inner_cv = False
+            methods = [
+                "disabled",
+                "current_average_worse_than_best_worst_split",
+                "current_average_worse_than_mean_best",
+            ]
         case "category3-nsplits-20":
             n_splits = [20]
             methods = [
                 "disabled",
                 "current_average_worse_than_best_worst_split",
                 "current_average_worse_than_mean_best",
-                "robust_std_top_3",
-                "robust_std_top_5",
             ]
         case "category3-nsplits-10":
             n_splits = [10]
@@ -190,8 +202,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                 "disabled",
                 "current_average_worse_than_best_worst_split",
                 "current_average_worse_than_mean_best",
-                "robust_std_top_3",
-                "robust_std_top_5",
             ]
         case "category3-nsplits-5":
             n_splits = [5]
@@ -199,8 +209,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                 "disabled",
                 "current_average_worse_than_best_worst_split",
                 "current_average_worse_than_mean_best",
-                "robust_std_top_3",
-                "robust_std_top_5",
             ]
         case "category3-nsplits-3":
             # This suite is running everything that had more
@@ -210,12 +218,19 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                 "disabled",
                 "current_average_worse_than_best_worst_split",
                 "current_average_worse_than_mean_best",
-                "robust_std_top_3",
-                "robust_std_top_5",
             ]
         case "category4-nsplits-2-5":
             n_splits = [-5]  # This is a hack to run 2 repeats of 5 fold cv (sorry)
             pipeline = "rf_classifier"
+            methods = [
+                "disabled",
+                "current_average_worse_than_best_worst_split",
+                "current_average_worse_than_mean_best",
+            ]
+        case "category8-nsplits-20-unseeded":
+            n_splits = [20]
+            pipeline = "rf_classifier"
+            seeded_inner_cv = False
             methods = [
                 "disabled",
                 "current_average_worse_than_best_worst_split",
@@ -228,8 +243,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                 "disabled",
                 "current_average_worse_than_best_worst_split",
                 "current_average_worse_than_mean_best",
-                # "robust_std_top_3", (maybe)  # noqa: ERA001
-                # "robust_std_top_5", (maybe)  # noqa: ERA001
             ]
         case "category4-nsplits-10":
             # This suite is running everything that had more
@@ -240,8 +253,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                 "disabled",
                 "current_average_worse_than_best_worst_split",
                 "current_average_worse_than_mean_best",
-                "robust_std_top_3",
-                "robust_std_top_5",
             ]
         case "category4-nsplits-5":
             # This suite is running everything that had more
@@ -252,8 +263,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                 "disabled",
                 "current_average_worse_than_best_worst_split",
                 "current_average_worse_than_mean_best",
-                "robust_std_top_3",
-                "robust_std_top_5",
             ]
         case "category4-nsplits-3":
             # This suite is running everything that had more
@@ -264,8 +273,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                 "disabled",
                 "current_average_worse_than_best_worst_split",
                 "current_average_worse_than_mean_best",
-                "robust_std_top_3",
-                "robust_std_top_5",
             ]
         case "category5-nsplits-10":
             # We have to return specifically for this as we don't want a full product of
@@ -280,8 +287,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                     "disabled",
                     "current_average_worse_than_best_worst_split",
                     "current_average_worse_than_mean_best",
-                    "robust_std_top_3",
-                    "robust_std_top_5",
                 ],
             )
             opt_method_set_2 = product(
@@ -290,8 +295,6 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                     # No "disabled" as it makes no sense to run with early stopping
                     "current_average_worse_than_best_worst_split",
                     "current_average_worse_than_mean_best",
-                    "robust_std_top_3",
-                    "robust_std_top_5",
                 ],
             )
             opt_methods = chain(opt_method_set_1, opt_method_set_2)
@@ -301,6 +304,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                     task=task,
                     fold=fold,
                     n_splits=n_splits,
+                    seeded_inner_cv=seeded_inner_cv,
                     # Constants for now
                     pipeline=pipeline,
                     n_cpus=n_cpu,
@@ -356,6 +360,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                     # Parameters defining experiments
                     task=task,
                     fold=fold,
+                    seeded_inner_cv=seeded_inner_cv,
                     n_splits=n_splits,
                     # Constants for now
                     pipeline=pipeline,
@@ -409,6 +414,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                     task=task,
                     fold=fold,
                     n_splits=n_splits,
+                    seeded_inner_cv=seeded_inner_cv,
                     # Constants for now
                     pipeline=pipeline,
                     n_cpus=n_cpu,
@@ -465,6 +471,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
                     task=task,
                     fold=fold,
                     n_splits=n_splits,
+                    seeded_inner_cv=seeded_inner_cv,
                     # Constants for now
                     pipeline=pipeline,
                     n_cpus=n_cpu,
@@ -508,6 +515,7 @@ def experiment_set(name: EXP_NAME) -> list[E1]:
             task=task,
             fold=fold,
             n_splits=n_splits,
+            seeded_inner_cv=seeded_inner_cv,
             # Constants for now
             pipeline=pipeline,
             n_cpus=n_cpu,
