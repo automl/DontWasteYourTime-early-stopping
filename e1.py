@@ -137,6 +137,10 @@ def exp_name_to_result_dir(exp_name: EXP_NAME) -> Path:
             return Path("results-category5").resolve()
         case "category6-nsplits-10" | "category6-nsplits-20":
             return Path("results-category6").resolve()
+        case "category7-nsplits-20-unseeded":
+            return Path("results-category7").resolve()
+        case "category8-nsplits-20-unseeded":
+            return Path("results-category8").resolve()
         case "debug":
             return Path("results-debug").resolve()
         case _:
