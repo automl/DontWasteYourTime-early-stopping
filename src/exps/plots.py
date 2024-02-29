@@ -72,7 +72,7 @@ MARKERS = {
     "current_average_worse_than_mean_best": "h",
     "current_average_worse_than_best_worst_split": "H",
     "robust_std_top_3": "D",
-    "robust_std_top_5": "P",
+    "robust_std_top_5": ">",
     "both": "s",
     "best": "X",
     # --- #
@@ -1255,12 +1255,17 @@ def speedup_plots(  # noqa: PLR0913
         ):
             _mttbb = method_results.loc[_method].loc[datasets]
             _color = COLORS[_method]  # type: ignore
+            _edgecolor = _color
             _marker = MARKERS[_method]  # type: ignore
+
+            if "smac" in _method and "with_fold_mean" in _method:
+                _marker = "P"
+
             _style = {
                 "s": MARKER_SIZE**2,
                 "marker": _marker,
                 "color": _color,  # "white"
-                "edgecolors": _color,
+                "edgecolors": _edgecolor,
             }
             ax.scatter(x=_mttbb, y=y_ticks, zorder=2, **_style)
 
@@ -1292,7 +1297,7 @@ def speedup_plots(  # noqa: PLR0913
             label=RENAMES.get(m, m),
             linestyle="",
             markersize=MARKER_SIZE,
-            marker=MARKERS[m],
+            marker=("P" if ("smac" in m and "with_fold_mean" in m) else MARKERS[m]),
             color=COLORS[m],
         )
         for m in methods
@@ -1324,12 +1329,14 @@ def speedup_plots(  # noqa: PLR0913
 
     # Maptlotlib doesn't like this supylabel, so we'll just use the the first axis
     # fig.supylabel("OpenML Task ID", fontsize="x-large")
+    # HACK: Sorry
+    ncol_legend = LEGEND_MAX_COLS if any("smac" in m for m in methods) else 3
     fig.legend(
         loc="upper center",
         bbox_to_anchor=(0.5, 0),
         fontsize=LEGEND_FONTSIZE,
         handles=legend_lines,
-        ncols=LEGEND_MAX_COLS,
+        ncols=ncol_legend,
     )
     fig.tight_layout()
     return speedups, _speedup_stats
