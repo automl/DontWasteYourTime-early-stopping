@@ -13,7 +13,6 @@ dask==2024.2.1
 dask-jobqueue==0.8.5
 distributed==2024.2.1
 emcee==3.1.4
--e git+ssh://git@github.com/eddiebergman/exps.git@64224504aaaff462dec59a1c3a6ad0e87b74dba2#egg=exps
 fonttools==4.49.0
 fsspec==2024.2.0
 idna==3.6
