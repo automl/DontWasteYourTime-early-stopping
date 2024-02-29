@@ -979,7 +979,7 @@ def main():  # noqa: C901, PLR0915, PLR0912
                             "output": str(log_dir / "%j-%a.out"),
                             "error": str(log_dir / "%j-%a.err"),
                         },
-                        python="/work/dlclarge2/bergmane-pipeline-exps/exps/.eddie-venv/bin/python",
+                        python=None,  # Set explicitly if required.
                         script_dir=result_dir / "slurm-scripts",
                         sbatch=["sbatch", "--bosch"],
                         limit=1,
