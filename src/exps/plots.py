@@ -103,8 +103,8 @@ X_TICKS = {
 }
 RENAMES: dict[str, str] = {
     "disabled": "No Early Stopping",
-    "current_average_worse_than_mean_best": "Mean Of Best",
-    "current_average_worse_than_best_worst_split": "Worst Fold of Best",
+    "current_average_worse_than_mean_best": "Aggresive",
+    "current_average_worse_than_best_worst_split": "Forgiving",
     "robust_std_top_3": "Robust 3",
     "robust_std_top_5": "Robust 5",
     # --- #

@@ -11,7 +11,6 @@ from itertools import pairwise, product
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import matplotlib.gridspec
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -30,7 +29,6 @@ from exps.methods import METHODS
 from exps.pipelines import PIPELINES
 from exps.plots import (
     COLORS,
-    LEGEND_FONTSIZE,
     MARKER_SIZE,
     MARKERS,
     RENAMES,
@@ -467,7 +465,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--njobs", type=int, default=-1)
-    parser.add_argument("--figsize", type=int, default=10)
+    parser.add_argument("--figsize", type=int, default=7)
     parser.add_argument("--outpath", type=Path, required=True)
     parser.add_argument("--pipeline", type=str, choices=["mlp", "rf"], default="mlp")
     parser.add_argument("--granularity", type=int, default=30)
@@ -586,21 +584,21 @@ def main():
     area_z[area_z < 0.8] = 0  # noqa: PLR2004
 
     legend_markers = [
-        leg(marker="x", color="black", label="Border", markersize=MARKER_SIZE),
+        leg(marker="x", color="black", label="Border", markersize=MARKER_SIZE / 2),
         leg(
             markeredgecolor="black",
             marker=MARKERS[args.baseline],
             color=COLORS[args.baseline],
             label=RENAMES.get(args.baseline, args.baseline),
-            markersize=MARKER_SIZE,
+            markersize=MARKER_SIZE / 2,
         ),
-        leg(
-            markeredgecolor="black",
-            marker=MARKERS["both"],
-            color=COLORS["both"],
-            label="Both",
-            markersize=MARKER_SIZE,
-        ),
+        # leg(
+        # markeredgecolor="black",
+        # marker=MARKERS["both"],
+        # color=COLORS["both"],
+        # label="Both",
+        # markersize=MARKER_SIZE / 2,
+        # ),
     ]
     for method in args.methods:
         METHOD_NAME = RENAMES.get(method, method)
@@ -609,17 +607,16 @@ def main():
             [
                 leg(
                     marker=".",
-                    markeredgecolor="black",
                     color=COLORS[method],
                     label=EARLY_STOPPED_LABEL,
-                    markersize=MARKER_SIZE,
+                    markersize=MARKER_SIZE / 2,
                 ),
                 leg(
                     markeredgecolor="black",
                     marker=MARKERS[method],
                     color=COLORS[method],
                     label=METHOD_NAME,
-                    markersize=MARKER_SIZE,
+                    markersize=MARKER_SIZE / 2,
                 ),
             ],
         )
@@ -637,7 +634,7 @@ def main():
             palette=COLORS,
             xlim=(surface.data["emb-x"].min(), surface.data["emb-x"].max()),
             ylim=(surface.data["emb-y"].min(), surface.data["emb-y"].max()),
-            space=0.0001,
+            space=0,
             marginal_ticks=False,
         )
         g.ax_joint.contourf(perf_x, perf_y, perf_z, cmap="Purples", alpha=0.5)
@@ -652,6 +649,12 @@ def main():
         )
 
         # Plot marginals on x-axis with a kde
+        # We make all methods that are not this one transparent
+        modified_pallette = deepcopy(COLORS)
+        for k, _v in COLORS.items():
+            if k != _method:
+                modified_pallette[k] = (1, 1, 1, 1)
+
         sns.kdeplot(
             data=real_data,
             x="emb-x",
@@ -659,8 +662,9 @@ def main():
             fill=True,
             common_norm=True,
             common_grid=True,
-            palette=COLORS,
+            palette=modified_pallette,
             ax=g.ax_marg_x,
+            legend=False,
         )
 
         if i_method == len(things_to_plot) - 1:
@@ -675,7 +679,12 @@ def main():
                 palette=COLORS,
                 ax=g.ax_marg_y,
                 vertical=True,
+                legend=False,
             )
+        else:
+            g.ax_marg_y.remove()
+            # Monkey patch
+            g.ax_marg_y.monkey_deactivated = True
 
         # Now using the real data, we need to seperate it into different categories:
         # * Configs which both baseline and method fully scored (both)
@@ -700,10 +709,9 @@ def main():
                 x="emb-x",
                 y="emb-y",
                 color=COLORS[_method],
-                marker=".",
+                marker=MARKERS[_method],
                 edgecolors="black",
-                s=MARKER_SIZE**2 * (3 / 4),
-                alpha=0.3,
+                s=MARKER_SIZE**2,
             )
         else:
             merged_data = pd.merge(
@@ -717,9 +725,10 @@ def main():
             both = merged_data[merged_data["_merge"] == "both"]
 
             # Baseline will have scored it
-            both_scored = both[both["is_scored_baseline"] & both["is_scored_method"]]
+            both[both["is_scored_baseline"] & both["is_scored_method"]]
+            method_scored = method_data[method_data["is_scored"]]
             method_only = merged_data[merged_data["_merge"] == "right_only"]
-            method_only_scored = method_only[method_only["is_scored_method"]]
+            method_only[method_only["is_scored_method"]]
             method_only_not_scored = method_only[~method_only["is_scored_method"]]
 
             g.ax_joint.scatter(
@@ -728,10 +737,20 @@ def main():
                 y="emb-y_method",
                 color=COLORS[_method],
                 marker=".",
-                edgecolors="black",
+                # edgecolors="black",
+                alpha=0.7,
                 s=MARKER_SIZE**2 * (3 / 4),
-                alpha=0.3,
             )
+            g.ax_joint.scatter(
+                data=method_scored,
+                x="emb-x",
+                y="emb-y",
+                color=COLORS[_method],
+                marker=MARKERS[_method],
+                edgecolors="black",
+                s=MARKER_SIZE**2,
+            )
+            """
             g.ax_joint.scatter(
                 data=both_scored,
                 x="emb-x_baseline",
@@ -740,8 +759,6 @@ def main():
                 marker=MARKERS["both"],
                 s=MARKER_SIZE**2,
                 edgecolors="black",
-                label="Both",
-                alpha=0.7,
             )
             g.ax_joint.scatter(
                 data=method_only_scored,
@@ -751,8 +768,8 @@ def main():
                 marker=MARKERS[_method],
                 edgecolors="black",
                 s=MARKER_SIZE**2,
-                alpha=0.7,
             )
+            """
 
         g.ax_joint.scatter(
             data=surface.data.loc[border_df.index],
@@ -760,7 +777,6 @@ def main():
             y="emb-y",
             color="grey",
             marker="x",
-            alpha=0.2,
             s=MARKER_SIZE,
         )
 
@@ -786,21 +802,34 @@ def main():
         grids.append(g)
 
     # Place legend in top right of figure
-    fig = plt.figure(figsize=(args.figsize * len(args.methods) + 1, args.figsize))
-    gridsp = matplotlib.gridspec.GridSpec(1, len(args.methods) + 1)
+    fig = plt.figure(
+        figsize=(args.figsize * (len(args.methods) + 1), args.figsize),
+        constrained_layout=False,
+    )
+    gridsp = fig.add_gridspec(
+        1,
+        len(args.methods) + 1,
+        hspace=0,
+        wspace=0,
+        left=0,
+        right=1,
+        top=1,
+        bottom=0,
+    )
 
     [SeabornFig2Grid(g, fig, gridsp[i]) for i, g in enumerate(grids)]
-    fig.legend(
-        loc="upper right",
-        bbox_to_anchor=(0.98, 0.98),
-        fontsize=LEGEND_FONTSIZE,
-        handles=legend_markers,
-    )
-    gridsp.tight_layout(fig)
-    plt.show()
-
+    # Place legends below and center
+    # Not sure why this is just so much bigger than everything else
+    # fig.legend(
+    # loc="upper center",
+    # bbox_to_anchor=(0, -0.2),
+    # fontsize="x-small",
+    # handles=legend_markers,
+    # ncol=len(legend_markers) // 2,
+    # )
+    fig.tight_layout(pad=1, w_pad=0, h_pad=0)
     for ext in ["png", "pdf"]:
-        plt.savefig(f"{args.outpath}.{ext}", bbox_inches="tight", dpi=300)
+        fig.savefig(f"{args.outpath}.{ext}", bbox_inches="tight", dpi=300)
 
 
 if __name__ == "__main__":
