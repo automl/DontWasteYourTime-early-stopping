@@ -17,6 +17,11 @@ which lists the available commands:
 python e1.py --help
 ```
 
+### Example data
+We provide example data at the following link: https://figshare.com/s/b1653f7976f459de47d8
+It includes data the the MLP experiments for all datasets and all outer folds, with 10 fold inner cross-validation.
+This data can be used for plotting as described below (TODO:)
+
 ## Running the experiments
 Each experiment is given a certain `--expname` and is defined inside of `e1.py`.
 We've set up a small `"reproduce"` experiment to show a minamal working reconstruction
