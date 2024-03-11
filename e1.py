@@ -663,6 +663,11 @@ def main():  # noqa: C901, PLR0915, PLR0912
         )
 
     args = parser.parse_args()
+
+    if args.command is None:
+        parser.print_help()
+        sys.exit(0)
+
     if args.command == "plot-stacked":
         import matplotlib.pyplot as plt
 
