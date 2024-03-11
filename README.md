@@ -78,7 +78,6 @@ We provide the command to do so seperatly which you can adapt as required:
 python src/exps/footprint.py \
     --borders 300 \
     --support 400 \
-    --outpath plots/footprint-main \
     --method current_average_worse_than_mean_best current_average_worse_than_best_worst_split \
     --dataset 168350 \
     --fold 7 \
@@ -86,8 +85,11 @@ python src/exps/footprint.py \
     --seed 0 \
     --njobs -1 \
     --ignore-too-many-configs \
+    --outpath plots/footprint-main \
     data/mlp-nsplits-10.parquet.gzip
 ```
+
+The output file will be `plots/footprint-main.pdf` which you can view as a pdf.
 
 ## Running the experiments
 Each experiment is given a certain `--expname` and is defined inside of `e1.py`.
@@ -142,3 +144,71 @@ python e1.py collect --expname reproduce --out data/reproduce-results.parquet
 
 The results of these experiments can be used to the various plotting commands by
 passing in the `data/reproduce-results.parquet` file.
+
+# Structure of Code
+This is a brief overview to help you navigate the code:
+```
+src
+├─  e1.py                           # CLI Driver to perform functionality of the repo.
+                                    #   * Notably it also defines experiment sets specified with `--expname`
+├── exps
+│   ├── experiments
+│   │   ├── __init__.py
+│   │   └── exp1.py                 # Main experiment running file, runs one atomic unit of the experiment set
+                                    # with it's own cli to run them.
+│   ├── __init__.py
+│   ├── optimizers.py               # The optimizers implemented in the paper
+                                    #   * Notably the two SMAC variants and RandomSearch
+│   ├── methods.py                  # The methods used in the paper.
+                                    #  * Includes two methods not used in the paper RobustStdTopN
+│   ├── data.py                     # Get data for a split and handle edge cases with class imbalance
+│   ├── footprint.py                # Script to generate footprint plots
+│   ├── metrics.py                  # Metrics used in the paper (just ROC_AUC)
+│   ├── parsable.py                 # Utility to turn dataclasses into argparse CLI's
+│   ├── slurm.py                    # Utility to turn dataclasses into things that can be launched with a slurm script
+│   ├── pipelines.py                # The MLP and RF pipelines used in the paper
+│   ├── plots.py                    # The main plotting functions used for the paper
+│   ├── seaborn2fig.py              # Utility required for footprint plots
+│   ├── tasks.py                    # The openml tasks used in the paper
+│   └── util.py                     # Some util, mostly just pandas related data shrinking
+```
+
+## Predefined-experiments
+The experiments ran are defined in `e1.py::def experiment_set(name: EXP_NAME)` and can be selected
+using the `--expname` arg to `e1.py run/submit`.
+
+We list them here for convenience:
+```python
+# One notable hack is that `nsplits = 20` get's specially checked to specify 2 repeat, 10 fold and NOT
+# 20 fold cross validation
+EXP_CHOICES = [
+    "debug",
+    "reproduce",
+    "time-analysis", # Used to subselect dataset
+    # -------
+    "category3-nsplits-2-5",  # MLP pipeline (2 repeat, 5 fold)
+    "category3-nsplits-20",  # MLP pipeline (2 repeat, 10 fold)
+    "category3-nsplits-10",  # MLP pipeline
+    "category3-nsplits-5",  # MLP pipeline
+    "category3-nsplits-3",  # MLP pipeline
+    # -------
+    "category4-nsplits-2-5",  # RF pipeline (2 repeat, 5 fold)
+    "category4-nsplits-20",  # RF pipeline (2 repeat, 10 fold)
+    "category4-nsplits-10",  # RF pipeline
+    "category4-nsplits-5",  # RF pipeline
+    "category4-nsplits-3",  # RF pipeline
+    # -------
+    "category5-nsplits-10",  # {Default SMAC, SMAC w/ early stop mean report} MLP
+    "category5-nsplits-20",  # {Default SMAC, SMAC w/ early stop mean report} MLP
+    # -------
+    "category6-nsplits-10",  # {Default SMAC, SMAC w/ early stop mean report} RF
+    "category6-nsplits-20",  # {Default SMAC, SMAC w/ early stop mean report} RF
+    # ---
+    # NOTE: Accidental but data is still provided. None of it was used in plotting or reporting
+    # of information in the paper.
+    "category7-nsplits-20-unseeded",  # MLP pipeline (2 repeat, 10 fold) (unseeded inner)
+    "category8-nsplits-20-unseeded",  # RF pipeline (2 repeat, 10 fold) (unseeded inner)
+]
+```
+
+The contents of each experiment are defined in 
