@@ -57,6 +57,37 @@ e1.py plot-stacked --help
 e1.py src/exps/footprint.py --help
 ```
 
+The footprint plots can take a long time to generate due to iterative MDS embedding which
+is a non-linear scaling with the number of data points.
+The provided dataset is not too long, however exploring a dataset with only `3` folds can likely take
+up to an hour, depending on the dataset size and the number of trials that were evaluated.
+
+We provide the command to do so seperatly which you can adapt as required:
+```bash
+# --borders How many random configurations to use for informing MDS about the borders of the space
+# --support How many random configurations to use for informing MDS about random locations in the space
+# --outpath Where to save the plots
+# --method Which methods to plot (only really supports the main 3)
+# --dataset Which openml task id to retrieve and plot
+# --fold Which fold to plot
+# --max-iter How many iterations to run the MDS for
+# --seed Random seed for the MDS
+# --njobs How many jobs to use for the MDS
+# --ignore-too-many-configs Ignore the error when there are too many configurations (i.e. you acknowledge it takes time)
+python src/exps/footprint.py \
+    --borders 300 \
+    --support 400 \
+    --outpath plots/footprint-main \
+    --method current_average_worse_than_mean_best current_average_worse_than_best_worst_split \
+    --dataset 168350 \
+    --fold 7 \
+    --max-iter 100 \
+    --seed 0 \
+    --njobs -1 \
+    --ignore-too-many-configs \
+    data/mlp-nsplits-10.parquet.gzip
+```
+
 ## Running the experiments
 Each experiment is given a certain `--expname` and is defined inside of `e1.py`.
 We've set up a small `"reproduce"` experiment to show a minamal working reconstruction

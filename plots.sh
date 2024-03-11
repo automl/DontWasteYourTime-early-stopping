@@ -1,6 +1,3 @@
-# Footprint
-#python src/exps/footprint.py --borders 300 --support 400 --max-iter 100 --outpath plots/footprint-main --method current_average_worse_than_mean_best current_average_worse_than_best_worst_split --fold 7 data/mlp-nsplits-10.parquet.gzip
-#
 # Inc traces (no test)
 python e1.py plot-stacked --methods "disabled" "current_average_worse_than_mean_best" "current_average_worse_than_best_worst_split" --outpath plots --prefix results-main --n-splits 3 5 10 --model mlp rf --ax-height 3 --ax-width 5 --metric roc_auc_ovr --time-limit 3600 data/mlp-nsplits-3.parquet.gzip data/mlp-nsplits-5.parquet.gzip data/mlp-nsplits-10.parquet.gzip data/rf-nsplits-3.parquet.gzip data/rf-nsplits-5.parquet.gzip data/rf-nsplits-10.parquet.gzip
 # Inc traces (with test)
