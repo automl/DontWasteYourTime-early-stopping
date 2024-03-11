@@ -210,5 +210,3 @@ EXP_CHOICES = [
     "category8-nsplits-20-unseeded",  # RF pipeline (2 repeat, 10 fold) (unseeded inner)
 ]
 ```
-
-The contents of each experiment are defined in 
