@@ -19,7 +19,7 @@ dependencies = [
   "pyQT6",
 ]
 requires-python = ">=3.10"
-authors = [{ name = "Anon", email = "Anon@anon" }]
+authors = [{ name = "Anon", email = "Anon@anon.com" }]
 readme = "README.md"
 description = "Experiments for pipeline design"
 
