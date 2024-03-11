@@ -23,7 +23,8 @@ If things were unsuccessful, please ensure the output of `pip list` matches that
 of the `requirements.txt` file.
 
 ### Experiment Data
-We provide the data generated from the experiments at the following link: https://figshare.com/s/b1653f7976f459de47d8.
+We provide the data generated from the experiments at the following link:
+* https://figshare.com/s/413b730e2d943190d580
 
 Please create a folder `./data` and unzip the archive into that directory, you should set it up as the following:
 ```
