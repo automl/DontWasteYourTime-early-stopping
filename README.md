@@ -2,6 +2,7 @@
 The repository contains the code for the experiments in the paper
 "Don't Waste Your Time: Early Stopping for Cross-Validation".
 
+Paper: https://openreview.net/forum?id=D8IFbV2rTP
 
 ## Installation
 To install the package, first clone/unpack the repository, `cd` into it and
