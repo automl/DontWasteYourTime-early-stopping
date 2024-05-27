@@ -211,3 +211,18 @@ EXP_CHOICES = [
     "category8-nsplits-20-unseeded",  # RF pipeline (2 repeat, 10 fold) (unseeded inner)
 ]
 ```
+
+## Citation
+
+To cite our paper, please use the [AutoML Conference submission](https://openreview.net/forum?id=D8IFbV2rTP).
+You can also find the [ArXiv submission here](https://arxiv.org/abs/2405.03389):
+
+```bibtex
+@inproceedings{bergman2024,
+  title={Don't Waste Your Time: Early Stopping Cross-Validation},
+  author={Edward Bergman and Lennart Purucker and Frank Hutter},
+  booktitle={AutoML Conference 2024},
+  year={2024},
+  url={https://openreview.net/forum?id=zvV7hemQmtLl}
+}
+```
